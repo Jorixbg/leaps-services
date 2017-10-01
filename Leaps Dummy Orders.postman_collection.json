@@ -1,0 +1,733 @@
+{
+	"id": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+	"name": "Leaps Dummy Orders",
+	"description": "",
+	"order": [
+		"0e368533-4f74-87b0-c298-5e573799aab1",
+		"f16eadcf-d588-5246-199f-24d5023e4539",
+		"58fc642b-ea6d-cbeb-6f87-66a0efad00cc",
+		"de88d074-a2a0-baa3-44d0-7a9899243358",
+		"dee5275b-a141-8011-2a48-c6b5a6252413",
+		"547f1ea4-872f-cdb8-868a-637d2266a06e",
+		"4a28befb-d758-894b-ce0f-1db085bfe8e8",
+		"70928b88-483e-934a-8776-ca31397d9b99",
+		"ae6b8051-81ef-a535-eced-443d571198bb",
+		"08deeacf-eb1d-22f5-2d82-e6701b0cb7c9",
+		"563f5c16-5084-0686-7bc6-40ce1a70635b",
+		"7e5f0279-218a-052f-b86d-41723afe8440",
+		"a90de014-a104-d68e-8ee5-21d28a60e299",
+		"1b2f3820-da37-9852-e220-756af7f9ec28",
+		"d460e300-cfd6-63bd-ff1a-83c19506bae7",
+		"4b410c20-f106-409a-54c2-286094fe94b4",
+		"dee63339-85ae-cd57-d24b-f1fe51263a68",
+		"dbc464c5-3812-908b-279d-486f8836815c",
+		"aa4ed34a-4cd8-f0bb-c3b0-7a22a83f14aa",
+		"fbe00de4-f37f-5118-a4ac-d1f171e80501",
+		"4f591b7a-92ba-2bad-c5dc-25541f23e94f",
+		"2e05d5d1-e1c4-8b6a-c652-4f103b371f2d"
+	],
+	"folders": [],
+	"timestamp": 1499194156968,
+	"owner": "1985574",
+	"public": false,
+	"requests": [
+		{
+			"id": "08deeacf-eb1d-22f5-2d82-e6701b0cb7c9",
+			"headers": "Content-Type: application/json\nAuthorization: 1111177777\n",
+			"headerData": [
+				{
+					"key": "Content-Type",
+					"value": "application/json",
+					"description": "",
+					"enabled": true
+				},
+				{
+					"key": "Authorization",
+					"value": "1111177777",
+					"description": "",
+					"enabled": true
+				}
+			],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/event/pic",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "PUT",
+			"data": [],
+			"dataMode": "raw",
+			"version": 2,
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454493987,
+			"name": "/event/pic",
+			"description": "",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": [],
+			"rawModeData": "{\r\n  \"event_id\" : 13,\r\n  \"image\" : \"base64encodedfile\"\r\n}"
+		},
+		{
+			"id": "0e368533-4f74-87b0-c298-5e573799aab1",
+			"headers": "Content-Type: application/json\n",
+			"headerData": [
+				{
+					"key": "Content-Type",
+					"value": "application/json",
+					"description": "",
+					"enabled": true
+				}
+			],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/register",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "POST",
+			"data": [],
+			"dataMode": "raw",
+			"version": 2,
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454540739,
+			"name": "/register",
+			"description": "Register new user",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": [],
+			"rawModeData": "{\r\n  \"email_address\" : \"krika_original@mail.bg\",\r\n  \"first_name\" : \"Mityo\",\r\n  \"last_name\" : \"Krika\",\r\n  \"birthday\" : \"2264545662345632\",\r\n  \"password\" : \"baizai\",\r\n  \"fb_id\" : 13452512645,\r\n  \"google_id\" : 23423423423\r\n  }"
+		},
+		{
+			"id": "1b2f3820-da37-9852-e220-756af7f9ec28",
+			"headers": "Authorization: 1111177777\n",
+			"headerData": [
+				{
+					"key": "Authorization",
+					"value": "1111177777",
+					"description": "",
+					"enabled": true
+				}
+			],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/event/1",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "GET",
+			"data": null,
+			"dataMode": "params",
+			"version": 2,
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454473772,
+			"name": "/event/{event_id}",
+			"description": "",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": []
+		},
+		{
+			"id": "2e05d5d1-e1c4-8b6a-c652-4f103b371f2d",
+			"headers": "Content-Type: application/json\nAuthorization: 1111177777\n",
+			"headerData": [
+				{
+					"key": "Content-Type",
+					"value": "application/json",
+					"description": "",
+					"enabled": true
+				},
+				{
+					"key": "Authorization",
+					"value": "1111177777",
+					"description": "",
+					"enabled": true
+				}
+			],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/user/events/hosting",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "POST",
+			"data": [],
+			"dataMode": "raw",
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454422641,
+			"name": "/user/events/hosting",
+			"description": "",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": [],
+			"rawModeData": "{\n\t\"user_id\" : 123, \n\t\"limit\" : 20, \n\t\"page\" : 1\t\n}"
+		},
+		{
+			"id": "4a28befb-d758-894b-ce0f-1db085bfe8e8",
+			"headers": "Content-Type: application/json\nAuthorization: 1111177777\n",
+			"headerData": [
+				{
+					"key": "Content-Type",
+					"value": "application/json",
+					"description": "",
+					"enabled": true
+				},
+				{
+					"key": "Authorization",
+					"value": "1111177777",
+					"description": "",
+					"enabled": true
+				}
+			],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/user/trainer/filter",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "POST",
+			"data": [],
+			"dataMode": "raw",
+			"version": 2,
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454513340,
+			"name": "/user/trainer/filter",
+			"description": "",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": [],
+			"rawModeData": "{\r\n  \"address\": \"sofia\",\r\n  \"my_lnt\": 134.1342331,\r\n  \"my_lat\": 12132.12311,\r\n  \"distance\": 10,\r\n  \"min_price\": 15,\r\n  \"max_price\": 45,\r\n  \"tags\": [\r\n    \"cardio\",\r\n    \"running\"\r\n  ],\r\n  \"min_start_date\": \"2015-05-22\",\r\n  \"max_start_date\": \"2015-05-29\"\r\n}"
+		},
+		{
+			"id": "4b410c20-f106-409a-54c2-286094fe94b4",
+			"headers": "Content-Type: application/json\n",
+			"headerData": [
+				{
+					"key": "Content-Type",
+					"value": "application/json",
+					"description": "",
+					"enabled": true
+				}
+			],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/user/resetPassword",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "POST",
+			"data": [],
+			"dataMode": "raw",
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454464311,
+			"name": "localhost:8080/user/resetPassword",
+			"description": "",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": [],
+			"rawModeData": "{\r\n    \"email\" : gosho@abv.bg\r\n}"
+		},
+		{
+			"id": "4f591b7a-92ba-2bad-c5dc-25541f23e94f",
+			"headers": "Content-Type: application/json\nAuthorization: 1111177777\n",
+			"headerData": [
+				{
+					"key": "Content-Type",
+					"value": "application/json",
+					"description": "",
+					"enabled": true
+				},
+				{
+					"key": "Authorization",
+					"value": "1111177777",
+					"description": "",
+					"enabled": true
+				}
+			],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/user/events/attending",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "POST",
+			"data": [],
+			"dataMode": "raw",
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454428220,
+			"name": "/user/events/attending",
+			"description": "",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": [],
+			"rawModeData": "{\n\t\"user_id\" : 123, \n\t\"limit\" : 20, \n\t\"page\" : 1\t\n}"
+		},
+		{
+			"id": "547f1ea4-872f-cdb8-868a-637d2266a06e",
+			"headers": "Authorization: 1111177777\n",
+			"headerData": [
+				{
+					"key": "Authorization",
+					"value": "1111177777",
+					"description": "",
+					"enabled": true
+				}
+			],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/user/1",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "GET",
+			"data": null,
+			"dataMode": "params",
+			"version": 2,
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454517984,
+			"name": "/user/{user_id}",
+			"description": "",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": []
+		},
+		{
+			"id": "563f5c16-5084-0686-7bc6-40ce1a70635b",
+			"headers": "Authorization: 1111177777\nContent-Type: application/json\n",
+			"headerData": [
+				{
+					"key": "Authorization",
+					"value": "1111177777",
+					"description": "",
+					"enabled": true
+				},
+				{
+					"key": "Content-Type",
+					"value": "application/json",
+					"description": "",
+					"enabled": true
+				}
+			],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/event/pic",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "DELETE",
+			"data": [],
+			"dataMode": "raw",
+			"version": 2,
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454489151,
+			"name": "/event/pic",
+			"description": "",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": [],
+			"rawModeData": "{\r\n  \"image_id\" : 423423\r\n}"
+		},
+		{
+			"id": "58fc642b-ea6d-cbeb-6f87-66a0efad00cc",
+			"headers": "Content-Type: application/json\n",
+			"headerData": [
+				{
+					"key": "Content-Type",
+					"value": "application/json",
+					"description": "",
+					"enabled": true
+				}
+			],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/login/fb",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "POST",
+			"data": [],
+			"dataMode": "raw",
+			"version": 2,
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454532744,
+			"name": "/login/fb",
+			"description": "",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": [],
+			"rawModeData": "{ \r\n    \"fb_id\" : 123423423423\r\n}"
+		},
+		{
+			"id": "70928b88-483e-934a-8776-ca31397d9b99",
+			"headers": "Content-Type: application/json\nAuthorization: 1111177777\n",
+			"headerData": [
+				{
+					"key": "Content-Type",
+					"value": "application/json",
+					"description": "",
+					"enabled": true
+				},
+				{
+					"key": "Authorization",
+					"value": "1111177777",
+					"description": "",
+					"enabled": true
+				}
+			],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/user/pic",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "PUT",
+			"data": [],
+			"dataMode": "raw",
+			"version": 2,
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454507917,
+			"name": "/user/pic",
+			"description": "",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": [],
+			"rawModeData": "{\r\n  \"user_id\" : 13,\r\n  \"image\" : \"base64encodedfile\"\r\n}"
+		},
+		{
+			"id": "7e5f0279-218a-052f-b86d-41723afe8440",
+			"headers": "Content-Type: application/json\nAuthorization: 1111177777\n",
+			"headerData": [
+				{
+					"key": "Content-Type",
+					"value": "application/json",
+					"description": "",
+					"enabled": true
+				},
+				{
+					"key": "Authorization",
+					"value": "1111177777",
+					"description": "",
+					"enabled": true
+				}
+			],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/event/create",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "PUT",
+			"data": [],
+			"dataMode": "raw",
+			"version": 2,
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454484381,
+			"name": "/event/create",
+			"description": "",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": [],
+			"rawModeData": "{\r\n    \"title\" : \"trenirovchitsa\",\r\n    \"description\" : \"Nai-ultra mega huper yakata trenirovka ever izmislyana\", \r\n    \"date\" : \"6226623422532\",\r\n    \"time_from\" : \"6226623422532\",\r\n    \"time_to\" : \"6226623422532\",\r\n    \"owner_id\" : 1,\r\n    \"owner_name\" : \"Mityo Krika\",\r\n    \"owner_image_url\" : \"nyakakvo url\",\r\n    \"specialities\" : [ \"yoga\", \"running\", \"jogging\" ],\r\n    \"event_image_url\" : \"some url\",\r\n    \"coord_lat\" : 42.693351,\r\n    \"coord_lnt\" : 23.340381,\r\n    \"price_from\" : 10,\r\n    \"address\" : \"ул. „Шипка“ 34-36, 1504 София\",\r\n    \"free_slots\" : 50,\r\n    \"date_created\" : \"1365475684564\"\r\n}"
+		},
+		{
+			"id": "a90de014-a104-d68e-8ee5-21d28a60e299",
+			"headers": "Authorization: 1111177777\nContent-Type: application/json\n",
+			"headerData": [
+				{
+					"key": "Authorization",
+					"value": "1111177777",
+					"description": "",
+					"enabled": true
+				},
+				{
+					"key": "Content-Type",
+					"value": "application/json",
+					"description": "",
+					"enabled": true
+				}
+			],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/event/delete",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "DELETE",
+			"data": [],
+			"dataMode": "raw",
+			"version": 2,
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454478385,
+			"name": "/event/delete",
+			"description": "",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": [],
+			"rawModeData": "{\r\n    \"event_id\" : 2\r\n}"
+		},
+		{
+			"id": "aa4ed34a-4cd8-f0bb-c3b0-7a22a83f14aa",
+			"headers": "Authorization: 1111177777\nContent-Type: application/json\n",
+			"headerData": [
+				{
+					"key": "Authorization",
+					"value": "1111177777",
+					"description": "",
+					"enabled": true
+				},
+				{
+					"key": "Content-Type",
+					"value": "application/json",
+					"description": "",
+					"enabled": true
+				}
+			],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/event/attend",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "POST",
+			"data": [],
+			"dataMode": "raw",
+			"version": 2,
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454444588,
+			"name": "/event/attend",
+			"description": "",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": [],
+			"rawModeData": "{\r\n  \"user_id\" : 13,\r\n  \"event_id\" : 341\r\n}"
+		},
+		{
+			"id": "ae6b8051-81ef-a535-eced-443d571198bb",
+			"headers": "Content-Type: application/json\nAuthorization: 1111177777\n",
+			"headerData": [
+				{
+					"key": "Content-Type",
+					"value": "application/json",
+					"description": "",
+					"enabled": true
+				},
+				{
+					"key": "Authorization",
+					"value": "1111177777",
+					"description": "",
+					"enabled": true
+				}
+			],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/user/pic",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "DELETE",
+			"data": [],
+			"dataMode": "raw",
+			"version": 2,
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454499137,
+			"name": "/user/pic",
+			"description": "",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": [],
+			"rawModeData": "{\r\n  \"image_id\" : 423423\r\n}"
+		},
+		{
+			"id": "d460e300-cfd6-63bd-ff1a-83c19506bae7",
+			"headers": "",
+			"headerData": [],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/event/tags",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "GET",
+			"data": null,
+			"dataMode": "params",
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454469313,
+			"name": "/event/tags",
+			"description": "",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": []
+		},
+		{
+			"id": "dbc464c5-3812-908b-279d-486f8836815c",
+			"headers": "",
+			"headerData": [],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/user/trainer/feed",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "GET",
+			"data": null,
+			"dataMode": "params",
+			"version": 2,
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454451694,
+			"name": "/user/trainer/feed",
+			"description": "",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": []
+		},
+		{
+			"id": "de88d074-a2a0-baa3-44d0-7a9899243358",
+			"headers": "Content-Type: application/json\n",
+			"headerData": [
+				{
+					"key": "Content-Type",
+					"value": "application/json",
+					"description": "",
+					"enabled": true
+				}
+			],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/login/google",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "POST",
+			"data": [],
+			"dataMode": "raw",
+			"version": 2,
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454528594,
+			"name": "/login/google",
+			"description": "",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": [],
+			"rawModeData": "{\r\n    \"google_id\" : 123423423423\r\n}"
+		},
+		{
+			"id": "dee5275b-a141-8011-2a48-c6b5a6252413",
+			"headers": "Authorization: 1111177777\n",
+			"headerData": [
+				{
+					"key": "Authorization",
+					"value": "1111177777",
+					"description": "",
+					"enabled": true
+				}
+			],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/user/update",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "POST",
+			"data": [],
+			"dataMode": "raw",
+			"version": 2,
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454522499,
+			"name": "/user/update",
+			"description": "",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": [],
+			"rawModeData": "{\r\n  \"user_id\" : 1,\r\n  \"username\" : \"mityo_krika\",\r\n  \"email_address\" : \"krika_original@mail.bg\",\r\n  \"password\" : \"yakatarabota\",\r\n  \"gender\" : \"m\",\r\n  \"location\" : \"ул. „Петър Богдан“ 44, 1505 София\",\r\n  \"max_distance_setting\" : 4,\r\n  \"first_name\" : \"Mityo\",\r\n  \"last_name\" : \"Krika\",\r\n  \"profile_image_url\" : \"някакво урл\",\r\n  \"birthday\" : \"2016-03-22\",\r\n  \"description\" : \"колко съм здрав - толкоз и тъп\",\r\n  \"long_description\" : \"колко съм здрав - толкоз и тъп\",\r\n  \"years_of_training\" : 4,\r\n  \"phone_number\" : \"23423423\",\r\n  \"price_for_session\" : 42\r\n}"
+		},
+		{
+			"id": "dee63339-85ae-cd57-d24b-f1fe51263a68",
+			"headers": "Content-Type: application/json\n",
+			"headerData": [
+				{
+					"key": "Content-Type",
+					"value": "application/json",
+					"description": "",
+					"enabled": true
+				}
+			],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/user/trainer/feed",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "POST",
+			"data": [],
+			"dataMode": "raw",
+			"version": 2,
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454457529,
+			"name": "/user/trainer/feed",
+			"description": "",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": [],
+			"rawModeData": "{\r\n  \"address\": \"sofia\",\r\n  \"my_lnt\": 134.1342331,\r\n  \"my_lat\": 12132.12311,\r\n  \"distance\": 10,\r\n  \"min_price\": 15,\r\n  \"max_price\": 45,\r\n  \"tags\": [\r\n    \"cardio\",\r\n    \"running\"\r\n  ],\r\n  \"min_start_date\": \"2015-05-22\",\r\n  \"max_start_date\": \"2015-05-29\",\r\n  \"limit\" : 20,\r\n  \"page\" : 1\r\n}"
+		},
+		{
+			"id": "f16eadcf-d588-5246-199f-24d5023e4539",
+			"headers": "Content-Type: application/json\n",
+			"headerData": [
+				{
+					"key": "Content-Type",
+					"value": "application/json",
+					"description": "",
+					"enabled": true
+				}
+			],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/login",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "POST",
+			"data": [],
+			"dataMode": "raw",
+			"version": 2,
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454536817,
+			"name": "/login",
+			"description": "",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": [],
+			"rawModeData": "{\r\n    \"name\" : \"krika_original@mail.bg\",\r\n    \"password\" : \"yakatarabota\"\r\n}"
+		},
+		{
+			"id": "fbe00de4-f37f-5118-a4ac-d1f171e80501",
+			"headers": "Content-Type: application/json\n",
+			"headerData": [
+				{
+					"key": "Content-Type",
+					"value": "application/json",
+					"description": "",
+					"enabled": true
+				}
+			],
+			"url": "http://ec2-54-187-171-26.us-west-2.compute.amazonaws.com:8888/event/filter",
+			"queryParams": [],
+			"preRequestScript": null,
+			"pathVariables": {},
+			"pathVariableData": [],
+			"method": "POST",
+			"data": [],
+			"dataMode": "raw",
+			"version": 2,
+			"tests": null,
+			"currentHelper": "normal",
+			"helperAttributes": {},
+			"time": 1499454435356,
+			"name": "/event/filter",
+			"description": "",
+			"collectionId": "5e6b32e8-1bc5-9f1d-22da-c077465fbdda",
+			"responses": [],
+			"rawModeData": "{\r\n  \"address\": \"sofia\",\r\n  \"my_lnt\": 134.1342331,\r\n  \"my_lat\": 12132.12311,\r\n  \"distance\": 10,\r\n  \"min_price\": 15,\r\n  \"max_price\": 45,\r\n  \"tags\": [\r\n    \"cardio\",\r\n    \"running\"\r\n  ],\r\n  \"min_start_date\": \"2015-05-22\",\r\n  \"max_start_date\": \"2015-05-29\",\r\n  \"limit\" : 20,\r\n  \"page\" : 1\r\n}"
+		}
+	]
+}
