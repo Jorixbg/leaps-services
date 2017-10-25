@@ -31,6 +31,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.leaps.model.db.DBUserDao;
 import com.leaps.model.exceptions.AuthorizationException;
+import com.leaps.model.exceptions.EventException;
 import com.leaps.model.exceptions.ImageException;
 import com.leaps.model.exceptions.InvalidInputParamsException;
 import com.leaps.model.exceptions.UserException;
@@ -784,13 +785,116 @@ public class ImageController {
 	 * 
 		FORM DATA:
 		
-		key : rate_id, value: 10
+		key : event_id, value: 72
 		key: image, value: MultipartFile
 	 */
 	@RequestMapping(method = RequestMethod.POST, value = "/pic/rate")
-	public String addRatePicture(@RequestParam("image") MultipartFile multiPartFile, Model model, @RequestParam("user_id") String userIdParam, HttpServletRequest req, HttpServletResponse resp) {
-		// TODO
+	public String addRatePicture(@RequestParam("image") MultipartFile multiPartFile, Model model, @RequestParam("rate_id") String rateIdParam, HttpServletRequest req, HttpServletResponse resp) {
+		long rateId;
 		
-		return null;
+		InputStream inputStream = null;
+	    OutputStream outputStream = null;
+	    
+		try {
+			String token = req.getHeader("Authorization");
+			
+			if (token == null || token.isEmpty() || !LeapsUtils.isNumber(token)) {
+				throw new AuthorizationException(Configuration.INVALID_OR_EXPIRED_TOKEN);
+			}
+			
+			long checker = Long.valueOf(token);
+			
+			if (UserDao.getInstance().getUserFromCache(checker) == null) {
+				throw new AuthorizationException(Configuration.INVALID_OR_EXPIRED_TOKEN);
+			}
+			
+			if (!LeapsUtils.isNumber(rateIdParam)) {
+				throw new InvalidInputParamsException(Configuration.INVALID_INPUT_PAREMETERS);
+			}
+			
+			rateId = Long.valueOf(rateIdParam);
+			
+		    String suffix = LeapsUtils.getFileExtension(multiPartFile.getOriginalFilename());
+		    String fileName = String.valueOf(Configuration.RATE_IMAGE_PATH + System.currentTimeMillis()) + suffix;
+			
+		    File newFile = new File(Configuration.IMAGE_START_PATH + fileName); 
+		    
+		    // insert image into db
+	    	DBUserDao.getInstance().insertRateImageIntoDB(rateId, fileName);
+	    	
+	        inputStream = multiPartFile.getInputStream();
+
+		    if (!newFile.getParentFile().exists()) {
+		    	newFile.getParentFile().mkdirs();
+		    }
+	        
+	        if (!newFile.exists()) {
+	            newFile.createNewFile();
+	        }
+	        
+	        outputStream = new FileOutputStream(newFile);
+	        
+	        int read = 0;
+	        byte[] bytes = new byte[1024];
+
+	        while ((read = inputStream.read(bytes)) != -1) {
+	            outputStream.write(bytes, 0, read);
+	        }
+		    
+		    JsonObject response = new JsonObject();
+		    response.addProperty("image_id", rateId);
+		    response.addProperty("url", fileName);
+
+		    return response.toString();
+	    } catch (AuthorizationException ae) {
+			try {
+				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, ae.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (InvalidInputParamsException iip) {
+			try {
+				resp.sendError(HttpServletResponse.SC_BAD_REQUEST, iip.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (IOException e) {
+	        e.printStackTrace();
+	        return null;
+	    } catch (EventException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			return null;
+		} finally {
+	    	try {
+	    		if (outputStream != null) {
+					outputStream.close();
+	    		}
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+	    }
 	}
+	
+	/**
+	 * Rate picture download method
+	 * 
+		{
+		  "image_id" : 423423;
+		}
+	 */
+	@RequestMapping(value="Images/Rate/{fileName}.{ext}", method=RequestMethod.GET)
+    @ResponseBody
+    public void downloadRatePicture(@PathVariable("fileName") String fileName, @PathVariable("ext") String ext, HttpServletResponse resp, Model model) throws IOException {
+        File file = new File(Configuration.IMAGE_START_PATH + Configuration.RATE_IMAGE_PATH + fileName + "." + ext);
+        try {
+        	Files.copy(file.toPath(), resp.getOutputStream());
+        } catch (Exception e) {
+        	try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, Configuration.IMAGE_DOES_NOT_EXISTS);
+			} catch (IOException ioe) {}
+        }
+    }
 }

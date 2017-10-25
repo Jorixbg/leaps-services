@@ -15,7 +15,7 @@ public class DBManager {
 	private static final String DB_NAME = "leaps"; // Data Base name
 	private static final String PORT = "3306";
 	
-	private final String DB_URL = "jdbc:mysql://localhost:8806/" + DB_NAME + "?autoReconnect=true&useSSL=false?useUnicode=true&characterEncoding=utf-8";
+	private final String DB_URL = "jdbc:mysql://localhost:8806/" + DB_NAME + "?autoReconnect=true&useSSL=false&useUnicode=true&characterEncoding=utf-8";
 
 	
 	// LOCAL DATABASE CONFIGURATION
@@ -43,27 +43,22 @@ public class DBManager {
 				System.out.println("Something went wrong with the connection to the database: "  + e.getMessage());
 			}
 		} else {
-			try {
-				Class.forName(JDBC_DRIVER);
-				String jdbcUrl = "jdbc:mysql://" + HOSTNAME + ":" + PORT + "/" + DB_NAME + "?user=" + USER + "&password=" + PASS + "&autoReconnect=true&failOverReadOnly=false&maxReconnects=10&useUnicode=true&characterEncoding=utf-8";
-				conn = DriverManager.getConnection(jdbcUrl);
-				System.out.println("Connection to database was successfully");
-			} catch (ClassNotFoundException e) { 
-				System.out.println("No such driver imported");
-			} catch (SQLException e) { 
-				System.out.println("Something went wrong with the connection to the database: "  + e.getMessage());
-			}
+			createConnection();
 		}
 	}
 	
-	public static DBManager getInstance() {
-		if(instance == null) {
-	         instance = new DBManager();
-	      }
-	      return instance;
+	public synchronized static DBManager getInstance() {
+		if (instance == null) {
+			instance = new DBManager();
+	    }
+		
+	    return instance;
 	}
 	
-	public Connection getConnection() {
+	public synchronized Connection getConnection() {
+		if (conn == null) {
+			createConnection();
+		}
 		return conn;
 	}
 	
@@ -78,5 +73,18 @@ public class DBManager {
 
 	public static String getDbName() {
 		return DB_NAME;
+	}
+	
+	private void createConnection() {
+		try {
+			Class.forName(JDBC_DRIVER);
+			String jdbcUrl = "jdbc:mysql://" + HOSTNAME + ":" + PORT + "/" + DB_NAME + "?user=" + USER + "&password=" + PASS + "&autoReconnect=true&failOverReadOnly=false&maxReconnects=10&useUnicode=true&characterEncoding=utf-8";
+			conn = DriverManager.getConnection(jdbcUrl);
+			System.out.println("Connection to database was successfully");
+		} catch (ClassNotFoundException e) { 
+			System.out.println("No such driver imported");
+		} catch (SQLException e) {
+			System.out.println("Something went wrong with the connection to the database: "  + e.getMessage());
+		}
 	}
 }

@@ -1,12 +1,20 @@
 package com.leaps.model.utils;
 
 public class Configuration {
+
+	// Debug mode Configuration for logging
+	public static final boolean debugMode = true;
 	
 	// Tag variables
 	public static final int TAG_SELECT_LIMIT = 15;
 	
 	// Leaps json variables
 	public static final String USER_ID = "user_id";
+	
+	public static final String FAR_FAR_AWAY_TIME = "2900000000000";
+
+
+	public static final String LEAPS_GEOMAP_KEY = "AIzaSyBPoBOLpB51WtS9mYTNTrAVj0x642ZjA6g";
 	
 	// Exception messages
 	public static final String WRONG_USERNAME_PASSWORD_MESSAGE = "Wrong username or password!";
@@ -51,6 +59,7 @@ public class Configuration {
 	public static final String IMAGE_START_PATH = "/home/ec2-user/leaps/";
 	public static final String USER_IMAGE_PATH = "Images/Users/";
 	public static final String EVENT_IMAGE_PATH = "Images/Events/";
+	public static final String RATE_IMAGE_PATH = "Images/Rate/";
 	public static final String IMAGE_DOES_NOT_EXISTS = "Image does not exist";
 	public static final String IMAGE_LIMIT_FOR_USER_IS_REACHED = "Image limit for the user is reached";
 	public static final String IMAGE_LIMIT_FOR_EVENT_IS_REACHED = "Image limit for the event is reached";
@@ -72,8 +81,6 @@ public class Configuration {
 
 	public static final Object NOT_AVAILABLE_PARAM_FOR_NEARBY_EVENTS = "na";
 	
-	// Debug mode Configuration for logging
-	public static final boolean debugMode = true;
 	
 	// Three hours in millisecconds
 	// TODO: fix the timezone
@@ -91,4 +98,72 @@ public class Configuration {
 	public static final int MAX_RATING = 5;
 
 	public static final String INVALID_RATING_VALUE = "Rating cannot be less than " + MIN_RATING + " or greater than " + MAX_RATING;
+
+	public static final String CANNOT_RETRIEVE_EVENT_RATINGS = "Cannot retrieve event ratings";
+
+	public static final String CANNOT_RETRIEVE_EVENT_FOLLOWERS = "Cannot retrieve event followers";
+
+	public static final String CANNOT_RETRIEVE_IMAGE_FROM_DB = "Cannot retrieve image from db";
+
+	public static final String CANNOT_RETRIEVE_FOLLOWED_EVENTS = "Cannot retrieve followed events";
+	
+	public static final int DEFAULT_PAGE_COMMENTS_LIMIT = 20;
+
+	public static final String INVALID_PAGE_NUMBER = "The selected page cannot be 0";
+
+	public static final String EVENT_ID_PARAM_IS_REQUIRED = "event_id parameter is mandatory.";
+
+	public static final String CANNOT_UPDATE_EVENT = "Cannot update event";
+
+	public static final String CANNOT_INSERT_TAGS_IN_THE_DB = "Cannot insert tags in the db";
+
+	public static final String CANNOT_DELETE_TAGS_FOR_EVENT = "Cannot delete tags for event";
+
+	public static final String ERROR_READING_DATA_FROM_GEOLOCATOR = "There was an error while trying to read the data from geolocator";
+
+	public static final String CANNOT_DELETE_EVENT = "Cannot delete event";
+
+	public static final String CANNOT_RETRIEVE_RATE = "Cannot retrieve rate";
+
+	public static final String CANNOT_CREATE_NEW_EVENT = "Cannot create new event";
+
+	public static final String CANNOT_RETRIEVE_FOLLOWING_COUNT = "Cannot retrieve following count";
+
+	public static final String CANNOT_RETRIEVE_FOLLOWERS_COUNT = "Cannot retrieve followers count";
+
+	public static final String CANNOT_INSERT_USER_INTO_DB = "Cannot insert user into DB";
+
+	public static final String INVALID_TAG = "Invalid Tag";
+
+	public static final String CANNOT_RETRIEVE_USER_SPECIALTIES = "Cannot retrieve user specialties";
+
+	public static final String CANNOT_RETRIEVE_ATTENDING_EVENT_USERS = "Cannot retrieve attending event users";
+
+	public static final String CANNOT_UPDATE_USER = "Cannot update user";
+
+	public static final String CANNOT_RETRIEVE_ATTENDING_EVENTS_FOR_USER = "Cannot retrieve attending events for user";
+
+	public static final String CANNOT_RETRIEVE_HOSTING_EVENTS_FOR_USER = "Cannot retrieve hosting events for user";
+
+	public static final String CANNOT_RETRIEVE_EVENT_ATTENDEES = "Cannot retrieve event attendees";
+
+	public static final String CANNOT_UNNATEND_FROM_EVENT = "Cannot unattend from event";
+
+	public static final String CANNOT_RETRIEVE_NUMBER_OF_PAST_ATTENDING_EVENTS = "Cannot retrieve number of past attending events";
+
+	public static final String CANNOT_CHECK_IF_USER_ATTENDS_EVENT = "Cannot check if user already attends an event";
+
+	public static final String CANNOT_RETRIEVE_USERS_FROM_DB = "Cannot retrieve users from db";
+
+	public static final String CANNOT_RETRIEVE_MOST_POPULAR_EVENTS = "Cannot retrieve most popular events";
+
+	public static final String CANNOT_RETRIEVE_UPCOMMING_EVENTS = "Cannot retrieve upcomming events";
+
+	public static final String CANNOT_RETRIEVE_NEARBY_UPCOMMING_EVENTS = "Cannot retrieve nearby upcomming events";
+
+	public static final String CANNOT_RETRIEVE_FILTERED_EVENTS = "Cannot retrieve filtered events";
+
+	public static final String CANNOT_RETRIEVE_FILTERED_TRAINERS = "Cannot retrieve filtered trainers";
+
+	public static final String CANNOT_RETRIEVE_TAGS_FROM_DB = "Cannot retrieve tags from db";
 }

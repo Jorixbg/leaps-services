@@ -3,8 +3,6 @@ package com.leaps.controller;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
-import java.util.Enumeration;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
@@ -34,7 +32,7 @@ import com.leaps.model.event.Event;
 import com.leaps.model.event.EventDao;
 import com.leaps.model.exceptions.AuthorizationException;
 import com.leaps.model.exceptions.EventException;
-import com.leaps.model.exceptions.InvalidCredentialsException;
+import com.leaps.model.exceptions.ImageException;
 import com.leaps.model.exceptions.InvalidInputParamsException;
 import com.leaps.model.exceptions.InvalidParametersException;
 import com.leaps.model.exceptions.TagException;
@@ -43,6 +41,7 @@ import com.leaps.model.token.Token;
 import com.leaps.model.user.User;
 import com.leaps.model.user.UserDao;
 import com.leaps.model.utils.Configuration;
+import com.leaps.model.utils.DebuggingManager;
 import com.leaps.model.utils.LeapsUtils;
 
 @RestController
@@ -51,123 +50,14 @@ import com.leaps.model.utils.LeapsUtils;
 public class EventController {
 	
 	private final Logger logger = LoggerFactory.getLogger(EventController.class);
-
+	
 	/**
-	 * Event create method
-	 * 
-		{
-		    "title" : "trenirovchitsa",
-		    "description" : "Nai-ultra mega huper yakata trenirovka ever izmislyana", 
-		    "event_image_url" : "some url",
-		    "address" : "ул. „Шипка“ 34-36, 1504 София",
-		    "coord_lat" : 42.693351,
-		    "coord_lnt" : 23.340381,
-		    "price_from" : 10,
-		    "free_slots" : 50,
-		    "date" : "6226623422532",
-		    "time_from" : "6226623422532",
-		    "time_to" : "6226623422532",
-		    
-		    "owner_id" : 1,
-		    "owner_name" : "Mityo Krika",
-		    "owner_image_url" : "nyakakvo url",
-		    "specialities" : [ "yoga", "running", "jogging" ],
-		    
-		    "date_created" : "1365475684564"
-		}
+	 * Create event
 	 */
 	@RequestMapping(method = RequestMethod.PUT, value = "/create")
 	public String createEvent(HttpServletRequest req, HttpServletResponse resp) {
-		String title;
-		String description;
-		String address;
-		double latitude;
-		double longitute;
-		int priceFrom;
-		int freeSlots;
-		long date;
-		long timeFrom;
-		long timeTo;
-		List<String> tags = new ArrayList<String>();
-		
-		long ownerId = -1;
-		
-		try (Scanner sc = new Scanner(req.getInputStream())) {
-			String token = req.getHeader("Authorization");
-			
-			if (token == null || token.isEmpty() || !LeapsUtils.isNumber(token)) {
-				throw new AuthorizationException();
-			}
-			
-			long checkedToken = Long.valueOf(token);
-			
-			if (UserDao.getInstance().getUserFromCache(checkedToken) == null) {
-				throw new AuthorizationException(Configuration.INVALID_OR_EXPIRED_TOKEN);
-			}
-			
-			Map<Token, User> cachedUser = UserDao.getInstance().getUserFromCache(checkedToken);
-
-			if (cachedUser == null || cachedUser.isEmpty()) {
-				throw new AuthorizationException(Configuration.INVALID_OR_EXPIRED_TOKEN);
-			}
-
-			StringBuilder sb = new StringBuilder();
-			while (sc.hasNext()) {
-				sb.append(sc.nextLine());
-			}
-			
-			String requestData = sb.toString();
-
-			JsonParser parser = new JsonParser();
-			JsonObject obj = parser.parse(requestData).getAsJsonObject();
-			
-			if (obj.get("title") == null || obj.get("description") == null || obj.get("address") == null || obj.get("coord_lat") == null ||
-					obj.get("coord_lnt") == null || obj.get("price_from") == null || obj.get("free_slots") == null || obj.get("date") == null ||
-					obj.get("time_from") == null || obj.get("time_to") == null || obj.get("owner_id") == null) {
-				throw new InvalidCredentialsException(Configuration.ERROR_WHILE_CREATING_NEW_EVENT);
-			}
-			
-			Iterator<Map.Entry<Token, User>> it = cachedUser.entrySet().iterator();
-			while (it.hasNext()) {
-			    Map.Entry<Token, User> pair = it.next();
-			    ownerId = pair.getValue().getUserId();
-			}
-			
-			if (ownerId != obj.get("owner_id").getAsLong()) {
-				throw new InvalidCredentialsException("The owner's id does not match with the one on the server!");
-			}
-			
-			title = obj.get("title").getAsString();
-			description = obj.get("description").getAsString();
-			address = obj.get("address").getAsString();
-			latitude = obj.get("coord_lat").getAsDouble();
-			longitute = obj.get("coord_lnt").getAsDouble();
-			priceFrom = obj.get("price_from").getAsInt();
-			freeSlots = obj.get("free_slots").getAsInt();
-			date = obj.get("date").getAsLong();
-			timeFrom = obj.get("time_from").getAsLong();
-			timeTo = obj.get("time_to").getAsLong();
-			
-			
-			if (obj.get("tags") != null) {
-				JsonElement jsonTags = obj.get("tags");
-				Type listType = new TypeToken<List<String>>() {}.getType();
-
-				tags = new Gson().fromJson(jsonTags, listType);
-			}
-			
-			Event event = EventDao.getInstance().createNewEvent(title, description, address, latitude, longitute, priceFrom, freeSlots, date, 
-																timeFrom, timeTo, tags, ownerId);
-			
-			if (event == null) {
-				// TODO: write proper exception here
-				throw new EventException();
-			}
-			
-			JsonObject response = new JsonObject();
-			response.addProperty("event_id", event.getEventId());
-			
-			return response.toString();
+		try {
+			return EventDao.getInstance().createEvent(LeapsUtils.checkToken(req.getHeader("Authorization")), LeapsUtils.getRequestData(req)).toString();
 		} catch (AuthorizationException ae) {
 			try {
 				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, ae.getMessage());
@@ -193,85 +83,44 @@ public class EventController {
 	}
 	
 	/**
-	 * Get all feed events method
-	 * 
-	 * GET order
-	 * 
-	 * TOKEN is NOT required
+	 * Get all feed events
 	 */
 	@RequestMapping(method = RequestMethod.GET, value = "/feed/{lat_first}.{lat_second}/{lng_first}.{lng_second}")
 	public String getMultipleEvents(HttpServletRequest req, HttpServletResponse resp, @PathVariable("lat_first") String latFirstParam,
 			 @PathVariable("lat_second") String latSecondParam, @PathVariable("lng_first") String lngFirstParam, @PathVariable("lng_second") String lngSecondParam) {
-		
 		try {
-			// default value for feed
-			final int page = 1;
-			int limit = Configuration.EVENTS_RETURN_SIZE_IN_FEED;
-			
-			JsonObject response = new JsonObject();
-	
-			JsonArray popular = new JsonArray();
-			List<Event> popularEvents = DBUserDao.getInstance().getMostPopularEvents(page, limit);
-			for (int i = 0; i < popularEvents.size(); i++) {
-				popular.add(LeapsUtils.generateJsonEvent(popularEvents.get(i)));
-			}
-			
-			response.add("popular", popular);
-	
-			JsonArray nearby = new JsonArray();
-			
-			double latitude;
-			double longitude;
-			
-			try {
-				if (latFirstParam == null || latFirstParam.isEmpty() || latSecondParam == null || latSecondParam.isEmpty() ||
-					lngFirstParam == null || lngFirstParam.isEmpty() || lngSecondParam == null || lngSecondParam.isEmpty()) {
-					throw new InvalidParametersException(Configuration.INVALID_INPUT_PAREMETERS);
-				}
-				
-				// TODO: If some of the coordinate values equals 'na' string parameter, then we assume that they will not be presented so we return the popular events instead
-				// TODO: revise in the following stages
-				if (!latFirstParam.equals(Configuration.NOT_AVAILABLE_PARAM_FOR_NEARBY_EVENTS) || !latSecondParam.equals(Configuration.NOT_AVAILABLE_PARAM_FOR_NEARBY_EVENTS) ||
-					!lngFirstParam.equals(Configuration.NOT_AVAILABLE_PARAM_FOR_NEARBY_EVENTS) || !lngSecondParam.equals(Configuration.NOT_AVAILABLE_PARAM_FOR_NEARBY_EVENTS)) {
-					
-					latitude = Double.valueOf(latFirstParam + "." + latSecondParam);
-					longitude = Double.valueOf(lngFirstParam + "." + lngSecondParam);
-					
-					List<Event> responseEvents = DBUserDao.getInstance().getNearbyUpcommingEvents(latitude, longitude, page, limit);
-					
-					for (int i = 0; i < responseEvents.size(); i++) {
-						nearby.add(LeapsUtils.generateJsonEvent(responseEvents.get(i)));
-					}
-				}
-			} catch (InvalidParametersException ipe) {
-				try {
-					resp.sendError(HttpServletResponse.SC_BAD_REQUEST, ipe.getMessage());
-					return null;
-				} catch (IOException ioe) {
-					return null;
-				}
-			}
-			
-			
-			response.add("nearby", nearby);
-			
-			// TODO: currently using the most popular events logic
-			// TODO: revise in later stages
-			JsonArray suited = new JsonArray();
-			for (int i = 0; i < popularEvents.size(); i++) {
-				suited.add(LeapsUtils.generateJsonEvent(popularEvents.get(i)));
-			}
-			response.add("suited", suited);
-			
-			if (Configuration.debugMode) {
-				logger.info("Order: /feed/{lat_first}.{lat_second}/{lng_first}.{lng_second}");
-				logger.info(response.toString());
-			}
-			
-			return response.toString();
+			return EventDao.getInstance().getFeedEvents(latFirstParam, latSecondParam, lngFirstParam, lngSecondParam, UserDao.getInstance().checkIfTokenIsValid(req.getHeader("Authorization"))).toString();
 		} catch (UserException ue) {
 			try {
 				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, ue.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (EventException ee) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (InvalidParametersException ipe) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ipe.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (ImageException ie) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ie.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
 				return null;
 			} catch (IOException ioe) {
 				return null;
@@ -280,16 +129,15 @@ public class EventController {
 	}
 	
 	/**
-	 * 
 	 * Get event method
-	 * 
-	 * TOKEN is NOT required
 	 */
 	@RequestMapping(method = RequestMethod.GET, value = "/{event_id}")
 	public String getAdditionalEvents(HttpServletRequest req, HttpServletResponse resp, @PathVariable("event_id") String eventId) {
 		try {
+			long token = UserDao.getInstance().checkIfTokenIsValid(req.getHeader("Authorization"));
+			
 			JsonArray response = new JsonArray();
-			response.add(LeapsUtils.generateJsonEvent(EventDao.getInstance().getEvent(eventId)));
+			response.add(LeapsUtils.generateJsonEvent(EventDao.getInstance().getEvent(eventId), token));
 			
 			if (Configuration.debugMode) {
 				logger.info("Order: /{event_id}");
@@ -318,6 +166,20 @@ public class EventController {
 			} catch (IOException ioe) {
 				return null;
 			}
+		} catch (ImageException ie) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ie.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
 		}
 	}
 	
@@ -331,49 +193,58 @@ public class EventController {
 	@RequestMapping(method = RequestMethod.GET, value = "/tags")
 	public String getEventTags(HttpServletRequest req, HttpServletResponse resp) {
 		
-		List<String> tags = DBUserDao.getInstance().getMostPopularTags();
-		List<String> unusedTags = DBUserDao.getInstance().getTagsFromTheDB();
-		
-		if ((tags == null || tags.isEmpty()) && (unusedTags == null || unusedTags.isEmpty())) {
-			try {
-				throw new TagException(Configuration.CANNOT_RETRIEVE_TAGS_FROM_SERVER);
-			} catch (TagException te) {
+		try {
+			List<String> tags = DBUserDao.getInstance().getMostPopularTags();
+			List<String> unusedTags = DBUserDao.getInstance().getTagsFromTheDB();
+			
+			if ((tags == null || tags.isEmpty()) && (unusedTags == null || unusedTags.isEmpty())) {
 				try {
-					resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
-					return null;
-				} catch (IOException e1) {
-					return null;
-				}
-			}
-		}
-
-		JsonArray response = new JsonArray();
-		
-		if (tags.size() < Configuration.TAG_SELECT_LIMIT) {
-			for (int i = 0; i < unusedTags.size(); i++) {
-				if (!tags.contains(unusedTags.get(i))) {
-					for (int o = 0; o < tags.size(); o++) {
-						if (tags.get(o).equalsIgnoreCase(unusedTags.get(i))) {
-							break;
-						}
-						
-						if (o + 1 == tags.size()) {
-							tags.add(unusedTags.get(i));
-						}
+					throw new TagException(Configuration.CANNOT_RETRIEVE_TAGS_FROM_SERVER);
+				} catch (TagException te) {
+					try {
+						resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
+						return null;
+					} catch (IOException e1) {
+						return null;
 					}
 				}
-				
-				if (tags.size() == Configuration.TAG_SELECT_LIMIT) {
-					break;
+			}
+	
+			JsonArray response = new JsonArray();
+			
+			if (tags.size() < Configuration.TAG_SELECT_LIMIT) {
+				for (int i = 0; i < unusedTags.size(); i++) {
+					if (!tags.contains(unusedTags.get(i))) {
+						for (int o = 0; o < tags.size(); o++) {
+							if (tags.get(o).equalsIgnoreCase(unusedTags.get(i))) {
+								break;
+							}
+							
+							if (o + 1 == tags.size()) {
+								tags.add(unusedTags.get(i));
+							}
+						}
+					}
+					
+					if (tags.size() == Configuration.TAG_SELECT_LIMIT) {
+						break;
+					}
 				}
 			}
+			
+			for (int i = 0; i < tags.size(); i++) {
+				response.add(tags.get(i));
+			}
+	
+			return response.toString();
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
 		}
-		
-		for (int i = 0; i < tags.size(); i++) {
-			response.add(tags.get(i));
-		}
-
-		return response.toString();
 	}
 	
 	/**
@@ -448,7 +319,7 @@ public class EventController {
 			
 			DBUserDao.getInstance().addAttendeeForEvent(userId, eventId);
 			
-			JsonObject response = LeapsUtils.generateJsonEvent(event);
+			JsonObject response = LeapsUtils.generateJsonEvent(event, null);
 			
 			if (Configuration.debugMode) {
 				logger.info("Order: event/attend");
@@ -484,9 +355,23 @@ public class EventController {
 			} catch (IOException ioe) {
 				return null;
 			}
-		} catch (IOException e) {
+		} catch (ImageException ie) {
 			try {
-				resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ie.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (IOException ioe) {
+			try {
+				resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, ioe.getMessage());
 				return null;
 			} catch (IOException ioe2) {
 				return null;
@@ -562,6 +447,13 @@ public class EventController {
 			} catch (IOException ioe) {
 				return null;
 			}
+		} catch (UserException ue) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ue.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
 		} catch (IOException e) {
 			try {
 				resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
@@ -586,9 +478,15 @@ public class EventController {
 		List<String> tags = new ArrayList<String>();
 		long minStartingDate = -1;
 		long maxStartingDate = -1;
+		String maxStartingDateString = null;
 		int page = 1;
 		int limit = Configuration.FILTER_EVENTS_DEFAULT_PAGE_LIMITATION;
-				
+		
+		if (Configuration.debugMode) {
+			DebuggingManager.logRequestHeaders(req, logger);
+			logger.info("--------------- event/filter---------------");
+		}
+		
 		try (Scanner sc = new Scanner(req.getInputStream())) {
 			
 			StringBuilder sb = new StringBuilder();
@@ -598,6 +496,13 @@ public class EventController {
 
 			String requestData = sb.toString();
 
+			if (Configuration.debugMode) {
+				logger.info("------------------------------------------");
+				logger.info("Request Data:");
+				logger.info(requestData);
+				logger.info("------------------------------------------");
+			}
+			
 			JsonParser parser = new JsonParser();
 			JsonObject obj = parser.parse(requestData).getAsJsonObject();
 			
@@ -621,13 +526,17 @@ public class EventController {
 				tags = new Gson().fromJson(jsonTags, listType);
 			}
 			
-			if (obj.get("min_start_date") != null) {
+			if (obj.get("all_events") != null && obj.get("all_events").getAsBoolean() == Boolean.TRUE) {
+				minStartingDate = System.currentTimeMillis();
+			} else if (obj.get("min_start_date") != null) {
 				minStartingDate = obj.get("min_start_date").getAsLong();
 			} else {
 				throw new InvalidInputParamsException(Configuration.INVALID_INPUT_PAREMETERS + ": starting date");
 			}
 			
-			if (obj.get("max_start_date") != null) {
+			if (obj.get("all_events") != null && obj.get("all_events").getAsBoolean() == Boolean.TRUE) {
+				maxStartingDate = Long.valueOf(Configuration.FAR_FAR_AWAY_TIME);
+			} else if (obj.get("max_start_date") != null) {
 				maxStartingDate = obj.get("max_start_date").getAsLong();
 			} else {
 				throw new InvalidInputParamsException(Configuration.INVALID_INPUT_PAREMETERS + ": end date");
@@ -646,7 +555,7 @@ public class EventController {
 			List<Event> filteredEvents = null;
 			
 			if (latitude != 0.0 && longitude != 0.0) {
-				filteredEvents = DBUserDao.getInstance().getFilteredEventsWithCoordinates(keyWord, latitude, longitude, distance, tags, minStartingDate, maxStartingDate, page, limit);
+				filteredEvents = DBUserDao.getInstance().getFilteredEventsWithCoordinates(keyWord, latitude, longitude, distance, tags, minStartingDate, maxStartingDate, maxStartingDateString, page, limit);
 				response.addProperty("total_results", DBUserDao.getInstance().getFilteredEventsCountWithCoordinates(keyWord, latitude, longitude, distance, tags, minStartingDate, maxStartingDate, page, limit));
 			} else {
 				filteredEvents = DBUserDao.getInstance().getFilteredEvents(keyWord, distance, tags, minStartingDate, maxStartingDate, page, limit);
@@ -654,11 +563,18 @@ public class EventController {
 			}
 			
 			for (int i = 0; i < filteredEvents.size(); i++) {
-				filteredEventsJson.add(LeapsUtils.generateJsonEvent(filteredEvents.get(i)));
+				filteredEventsJson.add(LeapsUtils.generateJsonEvent(filteredEvents.get(i), null));
 			}
 
 			response.add("events", filteredEventsJson);
-
+			
+			if (Configuration.debugMode) {
+				logger.info("------------------------------------------");
+				logger.info("Order Response:");
+				logger.info(response.toString());
+				logger.info("------------------END---------------------");
+			}
+			
 			return response.toString();
 		} catch (InvalidInputParamsException ipe) {
 			try {
@@ -681,9 +597,23 @@ public class EventController {
 			} catch (IOException ioe2) {
 				return null;
 			}
-		} catch (IOException e) {
+		} catch (ImageException ie) {
 			try {
-				resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ie.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (IOException ioe) {
+			try {
+				resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, ioe.getMessage());
 				return null;
 			} catch (IOException ioe2) {
 				return null;
@@ -714,7 +644,7 @@ public class EventController {
 			JsonArray response = new JsonArray();
 			
 			for (int i = 0; i < popularEvents.size(); i++) {
-				response.add(LeapsUtils.generateJsonEvent(popularEvents.get(i)));
+				response.add(LeapsUtils.generateJsonEvent(popularEvents.get(i), null));
 			}
 
 			return response.toString();
@@ -728,6 +658,27 @@ public class EventController {
 		} catch (InvalidParametersException ipe) {
 			try {
 				resp.sendError(HttpServletResponse.SC_BAD_REQUEST, ipe.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (EventException ee) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (ImageException ie) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ie.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
 				return null;
 			} catch (IOException ioe) {
 				return null;
@@ -805,7 +756,7 @@ public class EventController {
 			JsonArray response = new JsonArray();
 			
 			for (int i = 0; i < responseEvents.size(); i++) {
-				response.add(LeapsUtils.generateJsonEvent(responseEvents.get(i)));
+				response.add(LeapsUtils.generateJsonEvent(responseEvents.get(i), null));
 			}
 			
 			return response.toString();
@@ -819,6 +770,27 @@ public class EventController {
 		} catch (InvalidParametersException ipe) {
 			try {
 				resp.sendError(HttpServletResponse.SC_BAD_REQUEST, ipe.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (EventException ee) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (ImageException ie) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ie.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
 				return null;
 			} catch (IOException ioe) {
 				return null;
@@ -882,7 +854,80 @@ public class EventController {
 			} catch (IOException ioe2) {
 				return null;
 			}
+		} catch (ImageException ie) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ie.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
 		} catch (IOException ioe) {
+			try {
+				resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, ioe.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		}
+	}
+	
+	/**
+	 * 
+	 * Unfollow event
+	 * 
+	 * {
+	 *   "event_id" : 123
+	 * }
+	 */
+	@RequestMapping(method = RequestMethod.POST, value = "/unfollow")
+	public String unfollow(HttpServletRequest req, HttpServletResponse resp) throws AuthorizationException, InvalidInputParamsException, IOException {
+		try {
+			long token = LeapsUtils.checkToken(req.getHeader("Authorization"));
+			JsonObject obj = LeapsUtils.getRequestData(req);
+			
+			if (obj.get("event_id") == null) {
+				throw new InvalidInputParamsException(Configuration.INVALID_INPUT_PAREMETERS);
+			}
+			
+			EventDao.getInstance().unfollowEvent(token, obj.get("event_id").getAsInt());
+			
+			return HttpStatus.OK.toString();
+		} catch (AuthorizationException ae) {
+			try {
+				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, ae.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (InvalidInputParamsException iipe) {
+			try {
+				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, iipe.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (UserNotFoundException unfe) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, unfe.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (EventException ee) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		}catch (IOException ioe) {
 			try {
 				resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, ioe.getMessage());
 				return null;
@@ -908,9 +953,8 @@ public class EventController {
 	public String rate(HttpServletRequest req, HttpServletResponse resp) {
 		try {
 			long token = LeapsUtils.checkToken(req.getHeader("Authorization"));
-			EventDao.getInstance().rate(LeapsUtils.getRequestData(req), token);
 			
-			return HttpStatus.OK.toString();
+			return EventDao.getInstance().rate(LeapsUtils.getRequestData(req), token).toString();
 		} catch (AuthorizationException ae) {
 			try {
 				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, ae.getMessage());
@@ -942,6 +986,305 @@ public class EventController {
 		} catch (IOException ioe) {
 			try {
 				resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, ioe.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		}
+	}
+	
+	// TODO: do the implementation of delete event
+	@RequestMapping(method = RequestMethod.DELETE, value = "/delete")
+	public String delete(HttpServletRequest req, HttpServletResponse resp) {
+		try {
+			LeapsUtils.checkToken(req.getHeader("Authorization"));
+			EventDao.getInstance().deleteEvent(LeapsUtils.getRequestData(req));
+			
+			return HttpStatus.OK.toString();
+		} catch (AuthorizationException ae) {
+			try {
+				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, ae.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (InvalidInputParamsException iipe) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, iipe.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (IOException ioe) {
+			try {
+				resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, ioe.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (EventException ee) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		}
+	}
+	
+	/**
+	 * Get following users for future event
+	 */
+	@RequestMapping(method = RequestMethod.GET, value = "/following/future")
+	public String getFutureFollowing(HttpServletRequest req, HttpServletResponse resp) {
+		try {
+			long token = LeapsUtils.checkToken(req.getHeader("Authorization"));
+			
+			boolean isFutureEvent = true;
+			
+			JsonArray response = EventDao.getInstance().getFollowed(token, isFutureEvent);
+			
+			return response.toString();
+		} catch (AuthorizationException ae) {
+			try {
+				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, ae.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (UserException ue) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ue.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (EventException ee) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (ImageException ie) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ie.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		}
+	}
+
+	/**
+	 * Get following users for past event
+	 */
+	@RequestMapping(method = RequestMethod.GET, value = "/following/past")
+	public String getPastFollowing(HttpServletRequest req, HttpServletResponse resp) {
+		try {
+			long token = LeapsUtils.checkToken(req.getHeader("Authorization"));
+			
+			boolean isFutureEvent = false;
+			
+			JsonArray response = EventDao.getInstance().getFollowed(token, isFutureEvent);
+			
+			return response.toString();
+		} catch (AuthorizationException ae) {
+			try {
+				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, ae.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (UserException ue) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ue.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (EventException ee) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (ImageException ie) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ie.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		}
+	}
+
+	/**
+	 * Get all comments of an event
+	 */
+	@RequestMapping(method = RequestMethod.GET, value = "/comments/{event_id}/{page}/{limit}")
+	public String getComments(HttpServletRequest req, HttpServletResponse resp, @PathVariable("event_id") long eventId, 
+							  @PathVariable("page") int page, @PathVariable("limit") int limit) throws EventException {
+		try {
+			return EventDao.getInstance().getComments(eventId, page, limit).toString();
+		} catch (UserException ue) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ue.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (InvalidParametersException iipe) {
+			try {
+				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, iipe.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		}
+	}
+
+	/**
+	 * Update event
+	 * 
+	 * {
+     *   "title" : "trenirovchitsa",
+     *   "description" : "Nai-ultra mega huper yakata trenirovka ever izmislyana", 
+     *   "date" : "6226623422532",
+     *   "time_from" : "6226623422532",
+     *   "time_to" : "6226623422532",
+     *   "coord_lat" : 42.693351,
+     *   "coord_lnt" : 23.340381,
+     *   "price_from" : 10,
+     *   "address" : "ул. „Шипка“ 34-36, 1504 София",
+     *   "free_slots" : 50,
+     *   "date_created" : "1365475684564",
+     *   "tags" : [ "tag1", "tag2", "tag3" ... ]
+	 * }
+	 * 
+	 */
+	@RequestMapping(method = RequestMethod.POST, value = "/update")
+	public String update(HttpServletRequest req, HttpServletResponse resp) {
+		try {
+			long token = LeapsUtils.checkToken(req.getHeader("Authorization"));
+			EventDao.getInstance().update(LeapsUtils.getRequestData(req), token);
+
+			return HttpStatus.OK.toString();
+		} catch (AuthorizationException ae) {
+			try {
+				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, ae.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (IOException ioe) {
+			try {
+				resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, ioe.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (InvalidParametersException iipe) {
+			try {
+				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, iipe.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (EventException ee) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		}
+	}
+	
+	/**
+	 * Get all event attendees
+	 */
+	@RequestMapping(method = RequestMethod.GET, value = "/attendees/{event_id}")
+	public String getAllAtendees(HttpServletRequest req, HttpServletResponse resp, @PathVariable("event_id") String event_id) {
+		try {
+			return EventDao.getInstance().getAllAttendees(event_id, req.getHeader("Authorization")).toString();
+		} catch (InvalidParametersException iipe) {
+			try {
+				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, iipe.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (InvalidInputParamsException iipe) {
+			try {
+				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, iipe.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (EventException ee) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (UserException ue) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ue.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		}
+	}
+	
+	/**
+	 * Get a comment
+	 */
+	@RequestMapping(method = RequestMethod.GET, value = "/comment/{comment_id}")
+	public String getComment(HttpServletRequest req, HttpServletResponse resp, @PathVariable("comment_id") long comment_id) {
+		try {
+			return EventDao.getInstance().getComment(comment_id).toString();
+		} catch (InvalidInputParamsException iipe) {
+			try {
+				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, iipe.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (EventException ee) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (UserException ue) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ue.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
 				return null;
 			} catch (IOException ioe2) {
 				return null;

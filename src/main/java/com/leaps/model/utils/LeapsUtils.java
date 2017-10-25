@@ -4,6 +4,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.UnsupportedEncodingException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,8 +53,13 @@ import com.leaps.model.event.EventDao;
 import com.leaps.model.event.Tag;
 import com.leaps.model.exceptions.AuthorizationException;
 import com.leaps.model.exceptions.EventException;
+import com.leaps.model.exceptions.ImageException;
+import com.leaps.model.exceptions.TagException;
 import com.leaps.model.exceptions.UserException;
 import com.leaps.model.image.Image;
+import com.leaps.model.rate.Rate;
+import com.leaps.model.rate.RateDao;
+import com.leaps.model.token.Token;
 import com.leaps.model.user.User;
 import com.leaps.model.user.UserDao;
 
@@ -149,71 +156,14 @@ public class LeapsUtils {
 		return years;
 	}
 	
-//	/**
-//	 * Util method for generating a Json Event from defined input parameters
-//	 */
-//	public static JsonObject generateJsonEvent(long eventId, String title, String description, long date, long timeFrom, long timeTo, long ownerId, String ownerName, String ownerImageUrl,
-//										   List<Tag> specialities, List<User> attending, String eventImageUrl, double latitude, double longitude, int priceFrom, String address,
-//										   int freeSlots, long dateCreated, Map<String, String> images) {
-//		JsonObject tempJson = new JsonObject();
-//		tempJson.addProperty("event_id", eventId);
-//		tempJson.addProperty("title", title);
-//		tempJson.addProperty("description", description);
-//		tempJson.addProperty("date", date);
-//		tempJson.addProperty("time_from", timeFrom);
-//		tempJson.addProperty("time_to", timeTo);
-//		tempJson.addProperty("owner_id", ownerId);
-//		tempJson.addProperty("owner_name", ownerName);
-//		tempJson.addProperty("owner_image_url", ownerImageUrl);
-//		
-//		JsonArray specialitiesJson = new JsonArray();
-//		
-//		for (int i = 0; i < specialities.size(); i++) {
-//			specialitiesJson.add(specialities.get(i).getName());
-//		}
-//		
-//		tempJson.add("specialities", specialitiesJson);
-//		
-//		JsonArray attendingJson = new JsonArray();
-//		
-//		for (int i = 0; i < attending.size(); i++) {
-//			JsonObject tempUser = new JsonObject();
-//			tempUser.addProperty("user_id", attending.get(i).getUserId());
-//			tempUser.addProperty("user_name", attending.get(i).getFirstName() + " " + attending.get(i).getLastName());
-//			tempUser.addProperty("user_image_url", attending.get(i).getProfileImageUrl());
-//			attendingJson.add(tempUser);
-//		}
-//
-//		tempJson.add("attending", attendingJson);
-//
-//		tempJson.addProperty("event_image_url", eventImageUrl);
-//		tempJson.addProperty("coord_lat", latitude);
-//		tempJson.addProperty("coord_lnt", longitude);
-//		tempJson.addProperty("price_from", priceFrom);
-//		tempJson.addProperty("address", address);
-//		tempJson.addProperty("free_slots", freeSlots - attending.size());
-//		tempJson.addProperty("date_created", dateCreated);
-//		
-//		
-//		JsonArray imagesJson = new JsonArray();
-//		
-//		for (Map.Entry<String, String> map : images.entrySet()) {
-//			JsonObject eventImage = new JsonObject();
-//			eventImage.addProperty("image_id", Integer.valueOf(map.getKey()));
-//			eventImage.addProperty("image_url", map.getValue());
-//			imagesJson.add(eventImage);
-//		}
-//
-//		tempJson.add("images", imagesJson);
-//		
-//		return tempJson;
-//	}
-	
 	/**
 	 * Util method for generating a Json Event from defined input parameters
 	 * @throws UserException 
+	 * @throws EventException 
+	 * @throws ImageException 
+	 * @throws TagException 
 	 */
-	public static JsonObject generateJsonEvent(Event event) throws UserException {
+	public static JsonObject generateJsonEvent(Event event, Long token) throws UserException, EventException, ImageException, TagException {
 		User eventOwner = UserDao.getInstance().getUserFromDbOrCacheById(event.getOwnerId());
 		
 		JsonObject tempJson = new JsonObject();
@@ -226,6 +176,12 @@ public class LeapsUtils {
 		tempJson.addProperty("owner_id", event.getOwnerId());
 		tempJson.addProperty("owner_name", (eventOwner.getFirstName() + " " + eventOwner.getLastName().trim()));
 		tempJson.addProperty("owner_image_url", eventOwner.getProfileImageUrl());
+		tempJson.addProperty("can_rate", token != null ? UserDao.getInstance().canRate(event, token) : false);
+		
+		List<Rate> rate = DBUserDao.getInstance().getRatesForEvent(event.getEventId());
+		
+		tempJson.addProperty("rating", getEventRate(rate));
+		tempJson.addProperty("reviews", rate.size());
 		
 		JsonArray specialitiesJson = new JsonArray();
 		
@@ -237,21 +193,11 @@ public class LeapsUtils {
 		
 		tempJson.add("specialities", specialitiesJson);
 		
+		Map<String, Object> attendees = EventDao.getInstance().getAllEventAttendees(event, token);
+		JsonObject attendingJsonObject = (JsonObject) attendees.get("json");
+		List<User> attending = (List<User>) attendees.get("attendees");
 		
-		// TODO: refactor to return followed and others
-		JsonArray attendingJson = new JsonArray();
-		List<User> attending = DBUserDao.getInstance().getAllAttendingUsersForEvent(event.getEventId());
-		
-		for (int i = 0; i < attending.size(); i++) {
-			JsonObject tempUser = new JsonObject();
-			tempUser.addProperty("user_id", attending.get(i).getUserId());
-			tempUser.addProperty("user_name", attending.get(i).getFirstName() + " " + attending.get(i).getLastName());
-			tempUser.addProperty("user_image_url", attending.get(i).getProfileImageUrl());
-			attendingJson.add(tempUser);
-		}
-
-		tempJson.add("attending", attendingJson);
-		// end TODO
+		tempJson.add("attending", attendingJsonObject);
 		
 		tempJson.addProperty("event_image_url", event.getEventImageUrl());
 		tempJson.addProperty("coord_lat", event.getCoordLatitude());
@@ -279,11 +225,29 @@ public class LeapsUtils {
 	}
 	
 	/**
-	 * Util method for generating a Json User
-	 * @throws EventException 
-	 * @throws UserException 
+	 * Util method for getting average rate from a list of rates
 	 */
-	public static JsonObject generateJsonUser(User user) throws EventException, UserException {
+	public static double getEventRate(List<Rate> rate) {
+		double approxRate = 0;
+		double eventRate = 0;
+		
+		if (rate.size() > 0) {
+			for (int i = 0; i < rate.size(); i++) {
+				approxRate += rate.get(i).getRating();
+			}
+			
+			eventRate = round(approxRate / rate.size(), 2);
+		}
+			
+		return eventRate;
+	}
+
+	/**
+	 * Util method for generating a Json User
+	 * @throws ImageException 
+	 * @throws TagException 
+	 */
+	public static JsonObject generateJsonUser(User user, long token) throws EventException, UserException, ImageException, TagException {
 		JsonObject response = new JsonObject();
 		
 		response.addProperty("user_id", user.getUserId());
@@ -307,62 +271,38 @@ public class LeapsUtils {
 		response.addProperty("years_of_training", user.isTrainer() ? user.getYearsOfTraining() : null);
 		response.addProperty("session_price", user.isTrainer() ? user.getSessionPrice() : null);
 		
+		List<Integer> rating = UserDao.getInstance().getAllUserRatings(user.getUserId());		
+		double approxRate = 0;
+		double userRate = 0;
 		
-		JsonObject followedByJson = new JsonObject();
-		JsonArray followingJson = new JsonArray();
-		JsonArray othersJson = new JsonArray();
-		
-		Map<String, List<Long>> users = DBUserDao.getInstance().getFollowingUsers(user.getUserId());
-		List<Long> follower = null;
-		List<Long> followed = null;
-		for (Map.Entry<String, List<Long>> temp : users.entrySet()) {
-			if (temp.getKey().equals("follower")) {
-				follower = temp.getValue();
-			} else {
-				followed = temp.getValue();
+		if (rating.size() > 0) {
+			for (int i = 0; i < rating.size(); i++) {
+				approxRate += rating.get(i);
 			}
+			
+			userRate = round(approxRate / rating.size(), 2);
 		}
+
+		response.addProperty("rating", userRate);
+		response.addProperty("reviews", rating.size());
 		
-		// no need for null chech as if an error is thrown - it will be in the DBUserDao class and then it will be rethrown
-		for (int fod = 0; fod < followed.size(); fod++) {
-			User tempUser = DBUserDao.getInstance().getUserFromDbById(followed.get(fod));
-			JsonObject jsonUser = new JsonObject();
-			jsonUser.addProperty("user_id", tempUser.getUserId());
-			jsonUser.addProperty("full_name", (tempUser.getFirstName() + " " + tempUser.getLastName()).trim());
-			jsonUser.addProperty("user_profile_picture", tempUser.getProfileImageUrl());
-			
-			boolean match = false;
-			
-			for (int fol = 0; fol < follower.size(); fol++) {
-				if (followed.get(fod) == follower.get(fol)) {
-					followingJson.add(jsonUser);
-					match = true;
-					break;
-				}
-			}
-			
-			if (!match) {
-				othersJson.add(jsonUser);
-			}
-		}
+		response.addProperty("following_count", UserDao.getInstance().getFollowingCount(user.getUserId()));
+		response.addProperty("followers_count", UserDao.getInstance().getFollowersCount(user.getUserId()));
 		
-		followedByJson.add("following", followingJson);		
-		followedByJson.add("others", othersJson);
-		
-		response.add("followed_by", followedByJson);
+		response.add("followed_by", UserDao.getInstance().getAllUserFollowers(user));
 		
 		List<Event> attendingEvents = DBUserDao.getInstance().getAllAttendingEventsForUser(user.getUserId());
 		JsonArray attendingEventsJson = new JsonArray();
 		
 		for (int i = 0; i < attendingEvents.size(); i++) {
-			attendingEventsJson.add(LeapsUtils.generateJsonEvent(attendingEvents.get(i)));
+			attendingEventsJson.add(LeapsUtils.generateJsonEvent(attendingEvents.get(i), token));
 		}
 		response.add("attending_events", attendingEventsJson);
 		
 		List<Event> hostingEvents = DBUserDao.getInstance().getAllHostingEventsForUser(user.getUserId());
 		JsonArray hostingEventsJson = new JsonArray();
 		for (int i = 0; i < hostingEvents.size(); i++) {			
-			attendingEventsJson.add(LeapsUtils.generateJsonEvent(attendingEvents.get(i)));
+			hostingEventsJson.add(LeapsUtils.generateJsonEvent(hostingEvents.get(i), token));
 		}
 		response.add("hosting_events", hostingEventsJson);
 		
@@ -383,6 +323,52 @@ public class LeapsUtils {
 			userImagesJson.add(obj);
 		}
 		response.add("images", userImagesJson);
+		
+		return response;
+	}
+
+	/**
+	 * Util method for generating a Json Comment
+	 * @throws TagException 
+	 */
+	public static JsonObject generateJsonComment(long commentId) throws EventException, UserException, TagException {
+		JsonObject response = new JsonObject();
+		Rate rate = DBUserDao.getInstance().getRate(commentId);
+		User user = DBUserDao.getInstance().getUserFromDbById(rate.getUserId());
+		Event event = DBUserDao.getInstance().getEventById(rate.getEventId());
+
+		response.addProperty("event_id", rate.getEventId());
+		response.addProperty("event_title", event.getTitle());
+		response.addProperty("event_image_url", event.getEventImageUrl());
+		
+		List<Rate> eventRate = DBUserDao.getInstance().getRatesForEvent(event.getEventId());
+		
+		response.addProperty("event_rating", getEventRate(eventRate));
+		
+		List<Tag> tags = DBUserDao.getInstance().getAllEventTagsFromDb(rate.getEventId());
+		JsonArray jsonTags = new JsonArray();
+		for (int i = 0; i < tags.size(); i++) {
+			jsonTags.add(tags.get(i).getName());
+		}
+		response.add("tags", jsonTags);
+
+		response.addProperty("user_id", rate.getUserId());
+		response.addProperty("user_profile_image_url", user.getProfileImageUrl());
+		
+		String name = null;
+		if (user.getFirstName() != null && !user.getFirstName().isEmpty()) {
+			name = user.getFirstName();
+		} else if (user.getLastName() != null && !user.getLastName().isEmpty()) {
+			name = user.getLastName();
+		} else if (user.getUsername() != null && !user.getUsername().isEmpty()) {
+			name = user.getUsername();
+		}
+		response.addProperty("user_name", name);
+		
+		response.addProperty("comment_rating", rate.getRating());
+		response.addProperty("comment", rate.getComment());
+		response.addProperty("date_created", rate.getDateCreated());
+		response.addProperty("comment_image", rate.getImageUrl());
 		
 		return response;
 	}
@@ -427,695 +413,21 @@ public class LeapsUtils {
 		}
 	}
 	
+	/**
+	 * Rounding method
+	 */
+	private static double round(double value, int places) {
+	    if (places < 0) throw new IllegalArgumentException();
+
+	    BigDecimal bd = new BigDecimal(value);
+	    bd = bd.setScale(places, RoundingMode.HALF_UP);
+	    return bd.doubleValue();
+	}
 	
 	/****************************/
 	/** BELOW ARE DUMMY METHODS */
 	/****************************/
 	
-	
-	/**
-	 * An util method for generating a JsonObject of class User
-	 * @param paramOne -> username
-	 * @param paramTwo -> pass
-	 * @return JsonObject
-	 */
-	public static JsonObject generateJsonUser(String paramOne, String paramTwo) {
-		User tempUser = User.getDummyUser(paramOne, paramTwo);
-		
-		JsonObject tempJson = new JsonObject();
-		tempJson.addProperty("user_id", tempUser.getUserId());
-		tempJson.addProperty("username", tempUser.getUsername());
-		tempJson.addProperty("email_address", tempUser.getEmail());
-		tempJson.addProperty("age", tempUser.getAge());
-		tempJson.addProperty("gender", tempUser.getGender());
-		tempJson.addProperty("location", tempUser.getLocation());
-		tempJson.addProperty("max_distance_setting", tempUser.getMaxDistanceSetting());
-		tempJson.addProperty("first_name", tempUser.getFirstName());
-		tempJson.addProperty("last_name", tempUser.getLastName());
-		tempJson.addProperty("profile_image_url", tempUser.getProfileImageUrl());
-		tempJson.addProperty("birthday", tempUser.getBirthday());
-		tempJson.addProperty("description", tempUser.getDescription());
-		tempJson.addProperty("is_trainer", tempUser.isTrainer());
-		
-		return tempJson;
-	}
-	
-	/**
-	 * An util method for generating a JsonObject of class Trainer
-	 * @param paramOne -> username
-	 * @param paramTwo -> pass
-	 * @return JsonObject
-	 */
-	public static Object generateJsonTrainer(String paramOne, String paramTwo) {
-		User tempTrainer = User.getDummyTrainer(paramOne, paramTwo);
-		
-		JsonObject tempJson = new JsonObject();
-		tempJson.addProperty("user_id", tempTrainer.getUserId());
-		tempJson.addProperty("username", tempTrainer.getUsername());
-		tempJson.addProperty("email_address", tempTrainer.getEmail());
-		tempJson.addProperty("age", tempTrainer.getAge());
-		tempJson.addProperty("gender", tempTrainer.getGender());
-		tempJson.addProperty("location", tempTrainer.getLocation());
-		tempJson.addProperty("max_distance_setting", tempTrainer.getMaxDistanceSetting());
-		tempJson.addProperty("first_name", tempTrainer.getFirstName());
-		tempJson.addProperty("last_name", tempTrainer.getLastName());
-		tempJson.addProperty("profile_image_url", "https://www.novini.bg/uploads/news_pictures/2016-35/big/mitio-krika-spuka-10-dini-s-glavata-si-398375.png");
-		tempJson.addProperty("birthday", tempTrainer.getBirthday());
-		tempJson.addProperty("description", tempTrainer.getDescription());
-		tempJson.addProperty("is_trainer", tempTrainer.isTrainer());
-		tempJson.addProperty("phone_number", tempTrainer.getPhoneNumber());
-		tempJson.addProperty("years_of_training", tempTrainer.getYearsOfTraining());
-		tempJson.addProperty("session_price", tempTrainer.getSessionPrice());
-		tempJson.addProperty("long_description", tempTrainer.getLongDescription());
-		tempJson.addProperty("attended_events", 5);
-		
-		JsonArray images = new JsonArray();
-		JsonObject imgOne = new JsonObject();
-		imgOne.addProperty("image_id", 3);
-		imgOne.addProperty("image_url", "https://img.sportal.bg/uploads/news/2016_18/images/00602496.jpg?20161012233310");
-		JsonObject imgTwo = new JsonObject();
-		imgTwo.addProperty("image_id", 5);
-		imgTwo.addProperty("image_url", "https://img2.sportal.bg/uploads/news/2016_24/images/00609449.jpg?20161017185312");
-		images.add(imgOne);
-		images.add(imgTwo);
-		tempJson.add("images", images);
-		
-		JsonArray specialties = new JsonArray();
-		specialties.add("yoga");
-		specialties.add("fitness");
-		specialties.add("cardio");
-		tempJson.add("specialties", specialties);
-		
-		JsonArray followedBy = new JsonArray();
-		JsonObject followerOne = new JsonObject();
-		followerOne.addProperty("user_id", 1);
-		followerOne.addProperty("user_first_name", "Krasi");
-		followerOne.addProperty("user_profile_picture", "/uploads/pictures/pic1.jpg");
-		JsonObject followerTwo = new JsonObject();
-		followerTwo.addProperty("user_id", 2);
-		followerTwo.addProperty("user_first_name", "Zaiko");
-		followerTwo.addProperty("user_profile_picture", "/uploads/pictures/pic2.jpg");
-		JsonObject followerThree = new JsonObject();
-		followerThree.addProperty("user_id", 3);
-		followerThree.addProperty("user_first_name", "Sasho");
-		followerThree.addProperty("user_profile_picture", "/uploads/pictures/pic3.jpg");
-		followedBy.add(followerOne);
-		followedBy.add(followerTwo);
-		followedBy.add(followerThree);
-		tempJson.add("followed_by", followedBy);
-		
-		JsonArray attendingEvents = new JsonArray();
-		attendingEvents.add((JsonObject)LeapsUtils.generateJsonEventInThePast());
-		attendingEvents.add((JsonObject)LeapsUtils.generateJsonEventInThePast());
-		attendingEvents.add((JsonObject)LeapsUtils.generateJsonEventInThePast());
-		attendingEvents.add((JsonObject)LeapsUtils.generateJsonEventInThePast());
-		attendingEvents.add((JsonObject)LeapsUtils.generateJsonEventInThePast());
-		attendingEvents.add((JsonObject)LeapsUtils.generateJsonEventMoreInThePast());
-		attendingEvents.add((JsonObject)LeapsUtils.generateJsonEventMoreInThePast());
-		attendingEvents.add((JsonObject)LeapsUtils.generateJsonEventMoreInThePast());
-		attendingEvents.add((JsonObject)LeapsUtils.generateJsonEventMoreInThePast());
-		attendingEvents.add((JsonObject)LeapsUtils.generateJsonEventMoreInThePast());
-		attendingEvents.add((JsonObject)LeapsUtils.generateJsonEventInTheFuture());
-		attendingEvents.add((JsonObject)LeapsUtils.generateJsonEventInTheFuture());
-		attendingEvents.add((JsonObject)LeapsUtils.generateJsonEventInTheFuture());
-		attendingEvents.add((JsonObject)LeapsUtils.generateJsonEventInTheFuture());
-		attendingEvents.add((JsonObject)LeapsUtils.generateJsonEventInTheFuture());
-		attendingEvents.add((JsonObject)LeapsUtils.generateJsonEventMoreInTheFuture());
-		attendingEvents.add((JsonObject)LeapsUtils.generateJsonEventMoreInTheFuture());
-		attendingEvents.add((JsonObject)LeapsUtils.generateJsonEventMoreInTheFuture());
-		attendingEvents.add((JsonObject)LeapsUtils.generateJsonEventMoreInTheFuture());
-		attendingEvents.add((JsonObject)LeapsUtils.generateJsonEventMoreInTheFuture());
-		tempJson.add("attending_events", attendingEvents);
-		
-		JsonArray hostingEvents = new JsonArray();
-		hostingEvents.add((JsonObject)LeapsUtils.generateJsonEventInThePast());
-		hostingEvents.add((JsonObject)LeapsUtils.generateJsonEventInThePast());
-		hostingEvents.add((JsonObject)LeapsUtils.generateJsonEventInThePast());
-		hostingEvents.add((JsonObject)LeapsUtils.generateJsonEventInThePast());
-		hostingEvents.add((JsonObject)LeapsUtils.generateJsonEventInThePast());
-		hostingEvents.add((JsonObject)LeapsUtils.generateJsonEventMoreInThePast());
-		hostingEvents.add((JsonObject)LeapsUtils.generateJsonEventMoreInThePast());
-		hostingEvents.add((JsonObject)LeapsUtils.generateJsonEventMoreInThePast());
-		hostingEvents.add((JsonObject)LeapsUtils.generateJsonEventMoreInThePast());
-		hostingEvents.add((JsonObject)LeapsUtils.generateJsonEventMoreInThePast());
-		hostingEvents.add((JsonObject)LeapsUtils.generateJsonEventInTheFuture());
-		hostingEvents.add((JsonObject)LeapsUtils.generateJsonEventInTheFuture());
-		hostingEvents.add((JsonObject)LeapsUtils.generateJsonEventInTheFuture());
-		hostingEvents.add((JsonObject)LeapsUtils.generateJsonEventInTheFuture());
-		hostingEvents.add((JsonObject)LeapsUtils.generateJsonEventInTheFuture());
-		hostingEvents.add((JsonObject)LeapsUtils.generateJsonEventMoreInTheFuture());
-		hostingEvents.add((JsonObject)LeapsUtils.generateJsonEventMoreInTheFuture());
-		hostingEvents.add((JsonObject)LeapsUtils.generateJsonEventMoreInTheFuture());
-		hostingEvents.add((JsonObject)LeapsUtils.generateJsonEventMoreInTheFuture());
-		hostingEvents.add((JsonObject)LeapsUtils.generateJsonEventMoreInTheFuture());
-		tempJson.add("hosting_events", hostingEvents);
-		
-		return tempJson;
-	}
-	
-	public static Object generateJsonEvent() {
-		
-		/**
-		{
-			"event_id" : 1,
-			"title" : "trenirovchitsa",
-			"description" : "Nai-ultra mega huper yakata trenirovka ever izmislyana", 
-			"date" : "6226623422532",
-			"time_from" : "6226623422532",
-			"time_to" : "6226623422532",
-			"event_main_image" : "some url",
-			"owner_id" : 1,
-			"owner_name" : "Mityo Krika",
-			"owner_image_url" : "https://www.novini.bg/uploads/news_pictures/2016-35/big/mitio-krika-spuka-10-dini-s-glavata-si-398375.png",
-			"specialities" : [ "yoga", "running", "jogging" ],
-			"attending" : [
-				{
-					"user_id" : 1,
-					"user_name" : "zayo bayo",
-					"user_image_url" : "https://i49.vbox7.com/o/47c/47cb43c49a0.jpg"
-				},
-				{
-					"user_id" : 41,
-					"user_name" : "Kumcho Vulcho",
-					"user_image_url" : "https://images.webcafe.bg/2012/08/29/%E2%FA%EB%EA/618x464.jpg"
-				},
-				{
-					"user_id" : 23,
-					"user_name" : "100 kila",
-					"user_image_url" : "http://senzacia.net/wp-content/uploads/2013/05/100-kila-1.jpg"
-				}
-			],
-			"event_image_url" : "some url",
-			"coord_lat" : 42.693351,
-			"coord_lnt" : 23.340381,
-			"price_from" : 10,
-			"address" : "ул. „Шипка“ 34-36, 1504 София",
-			"free_slots" : 50,
-			"date_created" : "1365475684564"
-		}
-	**/
-		
-		Event tempEvent = Event.createDummyEvent();
-		JsonObject tempJson = new JsonObject();
-		tempJson.addProperty("event_id", tempEvent.getEventId());
-		tempJson.addProperty("title", tempEvent.getTitle());
-		tempJson.addProperty("description", tempEvent.getDescription());
-		tempJson.addProperty("date", tempEvent.getDate());
-		tempJson.addProperty("time_from", tempEvent.getTimeFrom());
-		tempJson.addProperty("time_to", tempEvent.getTimeTo());
-		tempJson.addProperty("event_main_image", tempEvent.getEventImageUrl());
-		tempJson.addProperty("owner_id", 1);
-		
-		tempJson.addProperty("owner_name", "Mityo Krika");
-		tempJson.addProperty("owner_image_url", "https://www.novini.bg/uploads/news_pictures/2016-35/big/mitio-krika-spuka-10-dini-s-glavata-si-398375.png");
-		
-		JsonArray specialities = new JsonArray();
-		specialities.add("yoga");
-		specialities.add("running");
-		specialities.add("jogging");
-		
-		tempJson.add("specialities", specialities);
-		
-		JsonArray attending = new JsonArray();
-		JsonObject tempUser = new JsonObject();
-		tempUser.addProperty("user_id", 1);
-		tempUser.addProperty("user_name", "zayo bayo");
-		tempUser.addProperty("user_image_url", "https://i49.vbox7.com/o/47c/47cb43c49a0.jpg");
-		
-		JsonObject tempUser2 = new JsonObject();
-		tempUser2.addProperty("user_id", 41);
-		tempUser2.addProperty("user_name", "Kumcho Vulcho");
-		tempUser2.addProperty("user_image_url", "https://images.webcafe.bg/2012/08/29/%E2%FA%EB%EA/618x464.jpg");
-
-		JsonObject tempUser3 = new JsonObject();
-		tempUser3.addProperty("user_id", 23);
-		tempUser3.addProperty("user_name", "100 kila");
-		tempUser3.addProperty("user_image_url", "http://senzacia.net/wp-content/uploads/2013/05/100-kila-1.jpg");
-		
-		attending.add(tempUser);
-		attending.add(tempUser2);
-		attending.add(tempUser3);
-		
-		tempJson.add("attending", attending);
-		
-		tempJson.addProperty("event_image_url", tempEvent.getEventImageUrl());
-		tempJson.addProperty("coord_lat", tempEvent.getCoordLatitude());
-		tempJson.addProperty("coord_lnt", tempEvent.getCoordLongitude());
-		tempJson.addProperty("price_from", 10);
-		tempJson.addProperty("address", tempEvent.getAddress());
-		tempJson.addProperty("free_slots", tempEvent.getFreeSlots());
-		tempJson.addProperty("date_created", tempEvent.getDateCreated());
-		
-		JsonArray images = new JsonArray();
-		JsonObject eventImageOne = new JsonObject();
-		eventImageOne.addProperty("image_id", 1);
-		eventImageOne.addProperty("image_url", "http://sportteam.co.za/wp-content/uploads/2017/02/istock_000051598656_large.jpg__1600x475_q85_crop_subject_location-2438626_upscale-1024x304.jpg");
-		
-		JsonObject eventImageTwo = new JsonObject();
-		eventImageTwo.addProperty("image_id", 2);
-		eventImageTwo.addProperty("image_url", "http://www.limontasport.com/wp-content/uploads/2016/03/limonta-sport-box-referenze-600x456.jpg");
-		
-		JsonObject eventImageThree = new JsonObject();
-		eventImageThree.addProperty("image_id", 3);
-		eventImageThree.addProperty("image_url", "https://cnnespanol2.files.wordpress.com/2017/03/170313194633-25-what-a-shot-0314-super-169.jpg?quality=90&strip=all");
-		
-		images.add(eventImageOne);
-		images.add(eventImageTwo);
-		images.add(eventImageThree);
-
-		tempJson.add("images", images);
-		
-		return tempJson;
-	}
-	
-	public static Object generateJsonEventWithoutPrice() {
-		
-		/**
-		{
-			"event_id" : 1,
-			"title" : "trenirovchitsa",
-			"description" : "Nai-ultra mega huper yakata trenirovka ever izmislyana", 
-			"date" : "6226623422532",
-			"time_from" : "6226623422532",
-			"time_to" : "6226623422532",
-			"owner_id" : 1,
-			"owner_name" : "Mityo Krika",
-			"owner_image_url" : "https://www.novini.bg/uploads/news_pictures/2016-35/big/mitio-krika-spuka-10-dini-s-glavata-si-398375.png",
-			"specialities" : [ "yoga", "running", "jogging" ],
-			"attending" : [
-				{
-					"user_id" : 1,
-					"user_name" : "zayo bayo",
-					"user_image_url" : "https://i49.vbox7.com/o/47c/47cb43c49a0.jpg"
-				},
-				{
-					"user_id" : 41,
-					"user_name" : "Kumcho Vulcho",
-					"user_image_url" : "https://images.webcafe.bg/2012/08/29/%E2%FA%EB%EA/618x464.jpg"
-				},
-				{
-					"user_id" : 23,
-					"user_name" : "100 kila",
-					"user_image_url" : "http://senzacia.net/wp-content/uploads/2013/05/100-kila-1.jpg"
-				}
-			],
-			"event_image_url" : "some url",
-			"coord_lat" : 42.693351,
-			"coord_lnt" : 23.340381,
-			"address" : "ул. „Шипка“ 34-36, 1504 София",
-			"free_slots" : 50,
-			"date_created" : "1365475684564"
-		}
-	**/
-		
-		Event tempEvent = Event.createDummyEvent();
-		JsonObject tempJson = new JsonObject();
-		tempJson.addProperty("event_id", tempEvent.getEventId());
-		tempJson.addProperty("title", tempEvent.getTitle());
-		tempJson.addProperty("description", tempEvent.getDescription());
-		tempJson.addProperty("date", tempEvent.getDate());
-		tempJson.addProperty("time_from", tempEvent.getTimeFrom());
-		tempJson.addProperty("time_to", tempEvent.getTimeTo());
-		tempJson.addProperty("owner_id", 1);
-		
-		tempJson.addProperty("owner_name", "Mityo Krika");
-		tempJson.addProperty("owner_image_url", "https://www.novini.bg/uploads/news_pictures/2016-35/big/mitio-krika-spuka-10-dini-s-glavata-si-398375.png");
-		
-		JsonArray specialities = new JsonArray();
-		specialities.add("yoga");
-		specialities.add("running");
-		specialities.add("jogging");
-		
-		tempJson.add("specialities", specialities);
-		
-		JsonArray attending = new JsonArray();
-		JsonObject tempUser = new JsonObject();
-		tempUser.addProperty("user_id", 1);
-		tempUser.addProperty("user_name", "zayo bayo");
-		tempUser.addProperty("user_image_url", "https://i49.vbox7.com/o/47c/47cb43c49a0.jpg");
-		
-		JsonObject tempUser2 = new JsonObject();
-		tempUser2.addProperty("user_id", 41);
-		tempUser2.addProperty("user_name", "Kumcho Vulcho");
-		tempUser2.addProperty("user_image_url", "https://images.webcafe.bg/2012/08/29/%E2%FA%EB%EA/618x464.jpg");
-
-		JsonObject tempUser3 = new JsonObject();
-		tempUser3.addProperty("user_id", 23);
-		tempUser3.addProperty("user_name", "100 kila");
-		tempUser3.addProperty("user_image_url", "http://senzacia.net/wp-content/uploads/2013/05/100-kila-1.jpg");
-		
-		attending.add(tempUser);
-		attending.add(tempUser2);
-		attending.add(tempUser3);
-		
-		tempJson.add("attending", attending);
-		
-		tempJson.addProperty("event_image_url", tempEvent.getEventImageUrl());
-		tempJson.addProperty("coord_lat", tempEvent.getCoordLatitude());
-		tempJson.addProperty("coord_lnt", tempEvent.getCoordLongitude());
-		tempJson.addProperty("address", tempEvent.getAddress());
-		tempJson.addProperty("free_slots", tempEvent.getFreeSlots());
-		tempJson.addProperty("date_created", tempEvent.getDateCreated());
-		
-		JsonArray images = new JsonArray();
-		JsonObject eventImageOne = new JsonObject();
-		eventImageOne.addProperty("image_id", 1);
-		eventImageOne.addProperty("image_url", "http://sportteam.co.za/wp-content/uploads/2017/02/istock_000051598656_large.jpg__1600x475_q85_crop_subject_location-2438626_upscale-1024x304.jpg");
-		
-		JsonObject eventImageTwo = new JsonObject();
-		eventImageTwo.addProperty("image_id", 2);
-		eventImageTwo.addProperty("image_url", "http://www.limontasport.com/wp-content/uploads/2016/03/limonta-sport-box-referenze-600x456.jpg");
-		
-		JsonObject eventImageThree = new JsonObject();
-		eventImageThree.addProperty("image_id", 3);
-		eventImageThree.addProperty("image_url", "https://cnnespanol2.files.wordpress.com/2017/03/170313194633-25-what-a-shot-0314-super-169.jpg?quality=90&strip=all");
-		
-		images.add(eventImageOne);
-		images.add(eventImageTwo);
-		images.add(eventImageThree);
-
-		tempJson.add("images", images);
-		
-		return tempJson;
-	}
-	
-	/**
-	 * An util method for generating a JsonObject of a dummy picture
-	 * @return JsonObject
-	 */
-	public static Object generateJsonPicture() {
-		JsonObject tempJson = new JsonObject();
-		tempJson.addProperty("image_id", 1324113);
-		tempJson.addProperty("url", "/event/13/image/1324113");
-		return tempJson;
-	}
-	
-	
-	/**
-		EVENT IN THE PAST
-	**/
-	public static Object generateJsonEventInThePast() {
-		Event tempEvent = Event.createDummyEvent();
-		JsonObject tempJson = new JsonObject();
-		tempJson.addProperty("event_id", tempEvent.getEventId());
-		tempJson.addProperty("title", tempEvent.getTitle());
-		tempJson.addProperty("description", tempEvent.getDescription());
-		tempJson.addProperty("date", (tempEvent.getDate() - (86400000*7) ));
-		tempJson.addProperty("time_from", (tempEvent.getTimeFrom() - (86400000*7)));
-		tempJson.addProperty("time_to", (tempEvent.getTimeTo() - (86400000*7)));
-		tempJson.addProperty("owner_id", 1);
-		
-		tempJson.addProperty("owner_name", "Mityo Krika");
-		tempJson.addProperty("owner_image_url", "https://www.novini.bg/uploads/news_pictures/2016-35/big/mitio-krika-spuka-10-dini-s-glavata-si-398375.png");
-		
-		JsonArray specialities = new JsonArray();
-		specialities.add("yoga");
-		specialities.add("running");
-		specialities.add("jogging");
-		
-		tempJson.add("specialities", specialities);
-		
-		JsonArray attending = new JsonArray();
-		JsonObject tempUser = new JsonObject();
-		tempUser.addProperty("user_id", 1);
-		tempUser.addProperty("user_name", "zayo bayo");
-		tempUser.addProperty("user_image_url", "https://i49.vbox7.com/o/47c/47cb43c49a0.jpg");
-		
-		JsonObject tempUser2 = new JsonObject();
-		tempUser2.addProperty("user_id", 41);
-		tempUser2.addProperty("user_name", "Kumcho Vulcho");
-		tempUser2.addProperty("user_image_url", "https://images.webcafe.bg/2012/08/29/%E2%FA%EB%EA/618x464.jpg");
-	
-		JsonObject tempUser3 = new JsonObject();
-		tempUser3.addProperty("user_id", 23);
-		tempUser3.addProperty("user_name", "100 kila");
-		tempUser3.addProperty("user_image_url", "http://senzacia.net/wp-content/uploads/2013/05/100-kila-1.jpg");
-		
-		attending.add(tempUser);
-		attending.add(tempUser2);
-		attending.add(tempUser3);
-		
-		tempJson.add("attending", attending);
-		
-		tempJson.addProperty("event_image_url", tempEvent.getEventImageUrl());
-		tempJson.addProperty("coord_lat", tempEvent.getCoordLatitude());
-		tempJson.addProperty("coord_lnt", tempEvent.getCoordLongitude());
-		tempJson.addProperty("price_from", 10);
-		tempJson.addProperty("address", tempEvent.getAddress());
-		tempJson.addProperty("free_slots", tempEvent.getFreeSlots());
-		tempJson.addProperty("date_created", tempEvent.getDateCreated());
-		
-		JsonArray images = new JsonArray();
-		JsonObject eventImageOne = new JsonObject();
-		eventImageOne.addProperty("image_id", 1);
-		eventImageOne.addProperty("image_url", "http://sportteam.co.za/wp-content/uploads/2017/02/istock_000051598656_large.jpg__1600x475_q85_crop_subject_location-2438626_upscale-1024x304.jpg");
-		
-		JsonObject eventImageTwo = new JsonObject();
-		eventImageTwo.addProperty("image_id", 2);
-		eventImageTwo.addProperty("image_url", "http://www.limontasport.com/wp-content/uploads/2016/03/limonta-sport-box-referenze-600x456.jpg");
-		
-		JsonObject eventImageThree = new JsonObject();
-		eventImageThree.addProperty("image_id", 3);
-		eventImageThree.addProperty("image_url", "https://cnnespanol2.files.wordpress.com/2017/03/170313194633-25-what-a-shot-0314-super-169.jpg?quality=90&strip=all");
-		
-		images.add(eventImageOne);
-		images.add(eventImageTwo);
-		images.add(eventImageThree);
-
-		tempJson.add("images", images);
-		
-		return tempJson;
-	}
-
-	/**
-		EVENT IN THE PAST
-	**/
-	public static Object generateJsonEventMoreInThePast() {
-		Event tempEvent = Event.createDummyEvent();
-		JsonObject tempJson = new JsonObject();
-		tempJson.addProperty("event_id", tempEvent.getEventId());
-		tempJson.addProperty("title", tempEvent.getTitle());
-		tempJson.addProperty("description", tempEvent.getDescription());
-		tempJson.addProperty("date", (tempEvent.getDate() - (86400000*10) ));
-		tempJson.addProperty("time_from", (tempEvent.getTimeFrom() - (86400000*10)));
-		tempJson.addProperty("time_to", (tempEvent.getTimeTo() - (86400000*10)));
-		tempJson.addProperty("owner_id", 1);
-		
-		tempJson.addProperty("owner_name", "Mityo Krika");
-		tempJson.addProperty("owner_image_url", "https://www.novini.bg/uploads/news_pictures/2016-35/big/mitio-krika-spuka-10-dini-s-glavata-si-398375.png");
-		
-		JsonArray specialities = new JsonArray();
-		specialities.add("yoga");
-		specialities.add("running");
-		specialities.add("jogging");
-		
-		tempJson.add("specialities", specialities);
-		
-		JsonArray attending = new JsonArray();
-		JsonObject tempUser = new JsonObject();
-		tempUser.addProperty("user_id", 1);
-		tempUser.addProperty("user_name", "zayo bayo");
-		tempUser.addProperty("user_image_url", "https://i49.vbox7.com/o/47c/47cb43c49a0.jpg");
-		
-		JsonObject tempUser2 = new JsonObject();
-		tempUser2.addProperty("user_id", 41);
-		tempUser2.addProperty("user_name", "Kumcho Vulcho");
-		tempUser2.addProperty("user_image_url", "https://images.webcafe.bg/2012/08/29/%E2%FA%EB%EA/618x464.jpg");
-
-		JsonObject tempUser3 = new JsonObject();
-		tempUser3.addProperty("user_id", 23);
-		tempUser3.addProperty("user_name", "100 kila");
-		tempUser3.addProperty("user_image_url", "http://senzacia.net/wp-content/uploads/2013/05/100-kila-1.jpg");
-		
-		attending.add(tempUser);
-		attending.add(tempUser2);
-		attending.add(tempUser3);
-		
-		tempJson.add("attending", attending);
-		
-		tempJson.addProperty("event_image_url", tempEvent.getEventImageUrl());
-		tempJson.addProperty("coord_lat", tempEvent.getCoordLatitude());
-		tempJson.addProperty("coord_lnt", tempEvent.getCoordLongitude());
-		tempJson.addProperty("price_from", 10);
-		tempJson.addProperty("address", tempEvent.getAddress());
-		tempJson.addProperty("free_slots", tempEvent.getFreeSlots());
-		tempJson.addProperty("date_created", tempEvent.getDateCreated());
-		
-		JsonArray images = new JsonArray();
-		JsonObject eventImageOne = new JsonObject();
-		eventImageOne.addProperty("image_id", 1);
-		eventImageOne.addProperty("image_url", "http://sportteam.co.za/wp-content/uploads/2017/02/istock_000051598656_large.jpg__1600x475_q85_crop_subject_location-2438626_upscale-1024x304.jpg");
-		
-		JsonObject eventImageTwo = new JsonObject();
-		eventImageTwo.addProperty("image_id", 2);
-		eventImageTwo.addProperty("image_url", "http://www.limontasport.com/wp-content/uploads/2016/03/limonta-sport-box-referenze-600x456.jpg");
-		
-		JsonObject eventImageThree = new JsonObject();
-		eventImageThree.addProperty("image_id", 3);
-		eventImageThree.addProperty("image_url", "https://cnnespanol2.files.wordpress.com/2017/03/170313194633-25-what-a-shot-0314-super-169.jpg?quality=90&strip=all");
-		
-		images.add(eventImageOne);
-		images.add(eventImageTwo);
-		images.add(eventImageThree);
-
-		tempJson.add("images", images);
-		
-		return tempJson;
-	}
-	
-	
-	/**
-		EVENT IN THE FUTURE
-	 **/
-	public static Object generateJsonEventInTheFuture() {
-		Event tempEvent = Event.createDummyEvent();
-		JsonObject tempJson = new JsonObject();
-		tempJson.addProperty("event_id", tempEvent.getEventId());
-		tempJson.addProperty("title", tempEvent.getTitle());
-		tempJson.addProperty("description", tempEvent.getDescription());
-		tempJson.addProperty("date", (tempEvent.getDate() + (86400000*20) ));
-		tempJson.addProperty("time_from", (tempEvent.getTimeFrom() + (86400000*20)));
-		tempJson.addProperty("time_to", (tempEvent.getTimeTo() + (86400000*20)));
-		tempJson.addProperty("owner_id", 1);
-		
-		tempJson.addProperty("owner_name", "Mityo Krika");
-		tempJson.addProperty("owner_image_url", "https://www.novini.bg/uploads/news_pictures/2016-35/big/mitio-krika-spuka-10-dini-s-glavata-si-398375.png");
-		
-		JsonArray specialities = new JsonArray();
-		specialities.add("yoga");
-		specialities.add("running");
-		specialities.add("jogging");
-		
-		tempJson.add("specialities", specialities);
-		
-		JsonArray attending = new JsonArray();
-		JsonObject tempUser = new JsonObject();
-		tempUser.addProperty("user_id", 1);
-		tempUser.addProperty("user_name", "zayo bayo");
-		tempUser.addProperty("user_image_url", "https://i49.vbox7.com/o/47c/47cb43c49a0.jpg");
-		
-		JsonObject tempUser2 = new JsonObject();
-		tempUser2.addProperty("user_id", 41);
-		tempUser2.addProperty("user_name", "Kumcho Vulcho");
-		tempUser2.addProperty("user_image_url", "https://images.webcafe.bg/2012/08/29/%E2%FA%EB%EA/618x464.jpg");
-
-		JsonObject tempUser3 = new JsonObject();
-		tempUser3.addProperty("user_id", 23);
-		tempUser3.addProperty("user_name", "100 kila");
-		tempUser3.addProperty("user_image_url", "http://senzacia.net/wp-content/uploads/2013/05/100-kila-1.jpg");
-		
-		attending.add(tempUser);
-		attending.add(tempUser2);
-		attending.add(tempUser3);
-		
-		tempJson.add("attending", attending);
-		
-		tempJson.addProperty("event_image_url", tempEvent.getEventImageUrl());
-		tempJson.addProperty("coord_lat", tempEvent.getCoordLatitude());
-		tempJson.addProperty("coord_lnt", tempEvent.getCoordLongitude());
-		tempJson.addProperty("price_from", 10);
-		tempJson.addProperty("address", tempEvent.getAddress());
-		tempJson.addProperty("free_slots", tempEvent.getFreeSlots());
-		tempJson.addProperty("date_created", tempEvent.getDateCreated());
-		
-		JsonArray images = new JsonArray();
-		JsonObject eventImageOne = new JsonObject();
-		eventImageOne.addProperty("image_id", 1);
-		eventImageOne.addProperty("image_url", "http://sportteam.co.za/wp-content/uploads/2017/02/istock_000051598656_large.jpg__1600x475_q85_crop_subject_location-2438626_upscale-1024x304.jpg");
-		
-		JsonObject eventImageTwo = new JsonObject();
-		eventImageTwo.addProperty("image_id", 2);
-		eventImageTwo.addProperty("image_url", "http://www.limontasport.com/wp-content/uploads/2016/03/limonta-sport-box-referenze-600x456.jpg");
-		
-		JsonObject eventImageThree = new JsonObject();
-		eventImageThree.addProperty("image_id", 3);
-		eventImageThree.addProperty("image_url", "https://cnnespanol2.files.wordpress.com/2017/03/170313194633-25-what-a-shot-0314-super-169.jpg?quality=90&strip=all");
-		
-		images.add(eventImageOne);
-		images.add(eventImageTwo);
-		images.add(eventImageThree);
-
-		tempJson.add("images", images);
-		
-		return tempJson;
-	}
-	
-	/**
-	EVENT IN THE FUTURE
-	 **/
-	public static Object generateJsonEventMoreInTheFuture() {
-		Event tempEvent = Event.createDummyEvent();
-		JsonObject tempJson = new JsonObject();
-		tempJson.addProperty("event_id", tempEvent.getEventId());
-		tempJson.addProperty("title", tempEvent.getTitle());
-		tempJson.addProperty("description", tempEvent.getDescription());
-		tempJson.addProperty("date", (tempEvent.getDate() + (86400000*30) ));
-		tempJson.addProperty("time_from", (tempEvent.getTimeFrom() + (86400000*30)));
-		tempJson.addProperty("time_to", (tempEvent.getTimeTo() + (86400000*30)));
-		tempJson.addProperty("owner_id", 1);
-		
-		tempJson.addProperty("owner_name", "Mityo Krika");
-		tempJson.addProperty("owner_image_url", "https://www.novini.bg/uploads/news_pictures/2016-35/big/mitio-krika-spuka-10-dini-s-glavata-si-398375.png");
-		
-		JsonArray specialities = new JsonArray();
-		specialities.add("yoga");
-		specialities.add("running");
-		specialities.add("jogging");
-		
-		tempJson.add("specialities", specialities);
-		
-		JsonArray attending = new JsonArray();
-		JsonObject tempUser = new JsonObject();
-		tempUser.addProperty("user_id", 1);
-		tempUser.addProperty("user_name", "zayo bayo");
-		tempUser.addProperty("user_image_url", "https://i49.vbox7.com/o/47c/47cb43c49a0.jpg");
-		
-		JsonObject tempUser2 = new JsonObject();
-		tempUser2.addProperty("user_id", 41);
-		tempUser2.addProperty("user_name", "Kumcho Vulcho");
-		tempUser2.addProperty("user_image_url", "https://images.webcafe.bg/2012/08/29/%E2%FA%EB%EA/618x464.jpg");
-	
-		JsonObject tempUser3 = new JsonObject();
-		tempUser3.addProperty("user_id", 23);
-		tempUser3.addProperty("user_name", "100 kila");
-		tempUser3.addProperty("user_image_url", "http://senzacia.net/wp-content/uploads/2013/05/100-kila-1.jpg");
-		
-		attending.add(tempUser);
-		attending.add(tempUser2);
-		attending.add(tempUser3);
-		
-		tempJson.add("attending", attending);
-		
-		tempJson.addProperty("event_image_url", tempEvent.getEventImageUrl());
-		tempJson.addProperty("coord_lat", tempEvent.getCoordLatitude());
-		tempJson.addProperty("coord_lnt", tempEvent.getCoordLongitude());
-		tempJson.addProperty("price_from", 10);
-		tempJson.addProperty("address", tempEvent.getAddress());
-		tempJson.addProperty("free_slots", tempEvent.getFreeSlots());
-		tempJson.addProperty("date_created", tempEvent.getDateCreated());
-		
-		JsonArray images = new JsonArray();
-		JsonObject eventImageOne = new JsonObject();
-		eventImageOne.addProperty("image_id", 1);
-		eventImageOne.addProperty("image_url", "http://sportteam.co.za/wp-content/uploads/2017/02/istock_000051598656_large.jpg__1600x475_q85_crop_subject_location-2438626_upscale-1024x304.jpg");
-		
-		JsonObject eventImageTwo = new JsonObject();
-		eventImageTwo.addProperty("image_id", 2);
-		eventImageTwo.addProperty("image_url", "http://www.limontasport.com/wp-content/uploads/2016/03/limonta-sport-box-referenze-600x456.jpg");
-		
-		JsonObject eventImageThree = new JsonObject();
-		eventImageThree.addProperty("image_id", 3);
-		eventImageThree.addProperty("image_url", "https://cnnespanol2.files.wordpress.com/2017/03/170313194633-25-what-a-shot-0314-super-169.jpg?quality=90&strip=all");
-		
-		images.add(eventImageOne);
-		images.add(eventImageTwo);
-		images.add(eventImageThree);
-	
-		tempJson.add("images", images);
-		
-		return tempJson;
-	}
-
 	public static void resetPassword(String email, String pass) throws MessagingException {
 		sendMail();
 //		final String username = "leaps.dev@gmail.com";
@@ -1165,7 +477,7 @@ public class LeapsUtils {
 		                                                              // Remember to use two slashes in place of each slash.
 		  
 		  // IMPORTANT: Ensure that the region selected below is the one in which your identities are verified.  
-		  Regions AWS_REGION = Regions.US_WEST_2;           // Choose the AWS region of the Amazon SES endpoint you want to connect to. Note that your sandbox 
+		  Regions AWS_REGION = Regions.EU_WEST_1;           // Choose the AWS region of the Amazon SES endpoint you want to connect to. Note that your sandbox 
 		                                                   // status, sending limits, and Amazon SES identity-related settings are specific to a given AWS 
 		                                                   // region, so be sure to select an AWS region in which you set up Amazon SES. Here, we are using 
 		                                                   // the US West (Oregon) region. Examples of other regions that Amazon SES supports are US_EAST_1 
@@ -1266,7 +578,7 @@ public class LeapsUtils {
 		System.err.println("Error message: " + ex.getMessage());
 		        ex.printStackTrace();
 		    }
-		}
+	}
 
 	public static void logRetrievedUserFromTheDB(User user) {
 		logger.info("User details: \n User Id: " + user.getUserId() + ", Username: " + user.getUsername() + ", Email: " + user.getEmail() + ", Age: " + user.getAge()

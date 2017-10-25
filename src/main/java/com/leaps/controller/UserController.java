@@ -35,15 +35,18 @@ import com.leaps.model.event.EventDao;
 import com.leaps.model.event.Tag;
 import com.leaps.model.exceptions.AuthorizationException;
 import com.leaps.model.exceptions.EventException;
+import com.leaps.model.exceptions.ImageException;
 import com.leaps.model.exceptions.InvalidCredentialsException;
 import com.leaps.model.exceptions.InvalidInputParamsException;
 import com.leaps.model.exceptions.InvalidParametersException;
+import com.leaps.model.exceptions.TagException;
 import com.leaps.model.exceptions.UserException;
 import com.leaps.model.image.Image;
 import com.leaps.model.user.User;
 import com.leaps.model.user.UserDao;
 import com.leaps.model.utils.Configuration;
 import com.leaps.model.utils.DebuggingManager;
+import com.leaps.model.utils.EmailSender;
 import com.leaps.model.utils.LeapsUtils;
 
 @RestController
@@ -82,17 +85,6 @@ public class UserController {
 		int sessionPrice;
 		String longDescription;
 		
-		if (Configuration.debugMode) {
-			logger.info("-------------------- BEGIN ORDER --------------------");
-			logger.info("Request header:");
-			Enumeration headerNames = req.getHeaderNames();
-	        while (headerNames.hasMoreElements()) {
-	            String key = (String) headerNames.nextElement();
-	            String value = req.getHeader(key);
-	            logger.info(key + " : " + value);
-	        }
-		}
-		
 		try (Scanner sc = new Scanner(req.getInputStream())) {
 			StringBuilder sb = new StringBuilder();
 			while (sc.hasNext()) {
@@ -100,10 +92,6 @@ public class UserController {
 			}
 
 			String token = req.getHeader("Authorization");
-
-			if (Configuration.debugMode) {
-				logger.info("Token: " + token);
-			}
 			
 			if (token == null || token.isEmpty() || !LeapsUtils.isNumber(token)) {
 				throw new AuthorizationException();
@@ -116,10 +104,6 @@ public class UserController {
 			}
 			
 			String requestData = sb.toString();
-
-			if (Configuration.debugMode) {
-				logger.info("Request json: " + requestData);
-			}
 			
 			JsonParser parser = new JsonParser();
 			JsonObject obj = parser.parse(requestData).getAsJsonObject();
@@ -232,10 +216,6 @@ public class UserController {
 			if (user != null) {
 				UserDao.getInstance().updateUserInCache(user, checker);
 			}
-			
-			if (Configuration.debugMode) {
-				logger.info("-------------------- END ORDER --------------------");
-			}
 			return HttpStatus.OK.toString();
 		} catch (AuthorizationException ae) {
 			try {
@@ -271,6 +251,8 @@ public class UserController {
 			DebuggingManager.logRequestHeaders(req, logger);
 		}
 		
+		long token = UserDao.getInstance().checkIfTokenIsValid(req.getHeader("Authorization"));
+		
 		try {
 			if(Long.valueOf(user_id) == null) {
 				throw new InvalidParametersException(Configuration.INVALID_USER_ID);
@@ -282,7 +264,7 @@ public class UserController {
 				throw new UserException(Configuration.INVALID_USER_ID);
 			}			
 
-			JsonObject response = LeapsUtils.generateJsonUser(user);
+			JsonObject response = LeapsUtils.generateJsonUser(user, token);
 			
 			if (Configuration.debugMode) {
 				DebuggingManager.logResponseJson(response, logger);
@@ -306,6 +288,20 @@ public class UserController {
 		} catch (EventException ee) {
 			try {
 				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (ImageException ie) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ie.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
 				return null;
 			} catch (IOException ioe) {
 				return null;
@@ -343,7 +339,12 @@ public class UserController {
 		int limit = Configuration.FILTER_EVENTS_DEFAULT_PAGE_LIMITATION;
 		long minStartingDate = -1;
 		long maxStartingDate = -1;
-				
+
+		if (Configuration.debugMode) {
+			DebuggingManager.logRequestHeaders(req, logger);
+			logger.info("---------- user/trainer/filter------------");
+		}
+		
 		try (Scanner sc = new Scanner(req.getInputStream())) {
 			
 			StringBuilder sb = new StringBuilder();
@@ -352,7 +353,14 @@ public class UserController {
 			}
 
 			String requestData = sb.toString();
-
+			
+			if (Configuration.debugMode) {
+				logger.info("------------------------------------------");
+				logger.info("Request Data:");
+				logger.info(requestData);
+				logger.info("------------------------------------------");
+			}
+			
 			JsonParser parser = new JsonParser();
 			JsonObject obj = parser.parse(requestData).getAsJsonObject();
 			
@@ -360,10 +368,11 @@ public class UserController {
 				keyWord = obj.get("key_words").getAsString();
 			}
 			
-			if (obj.get("my_lnt") != null && obj.get("my_lat") != null) {
-				latitude = obj.get("my_lat").getAsDouble();
-				longitude = obj.get("my_lnt").getAsDouble();
-			}
+			// commenting the longitude and latitude values as the users should not be searched by those criterias
+//			if (obj.get("my_lnt") != null && obj.get("my_lat") != null) {
+//				latitude = obj.get("my_lat").getAsDouble();
+//				longitude = obj.get("my_lnt").getAsDouble();
+//			}
 			
 			if (obj.get("distance") != null) {
 				distance = obj.get("distance").getAsInt();
@@ -376,13 +385,17 @@ public class UserController {
 				tags = new Gson().fromJson(jsonTags, listType);
 			}
 			
-			if (obj.get("min_start_date") != null) {
+			if (obj.get("all_trainers") != null && obj.get("all_trainers").getAsBoolean() == Boolean.TRUE) {
+				minStartingDate = System.currentTimeMillis();
+			} else if (obj.get("min_start_date") != null) {
 				minStartingDate = obj.get("min_start_date").getAsLong();
 			} else {
 				throw new InvalidInputParamsException(Configuration.INVALID_INPUT_PAREMETERS + ": starting date");
 			}
 			
-			if (obj.get("max_start_date") != null) {
+			if (obj.get("all_trainers") != null && obj.get("all_trainers").getAsBoolean() == Boolean.TRUE) {
+				maxStartingDate = Long.valueOf(Configuration.FAR_FAR_AWAY_TIME);
+			} else if (obj.get("max_start_date") != null) {
 				maxStartingDate = obj.get("max_start_date").getAsLong();
 			} else {
 				throw new InvalidInputParamsException(Configuration.INVALID_INPUT_PAREMETERS + ": end date");
@@ -443,14 +456,14 @@ public class UserController {
 				userFullName = user.getFirstName() + " " + user.getLastName();
 				
 				for (int i = 0; i < attendingEvents.size(); i++) {
-					attendingEventsJson.add(LeapsUtils.generateJsonEvent(attendingEvents.get(i)));
+					attendingEventsJson.add(LeapsUtils.generateJsonEvent(attendingEvents.get(i), null));
 				}
 				response.add("attending_events", attendingEventsJson);
 				
 				List<Event> hostingEvents = DBUserDao.getInstance().getAllHostingEventsForUser(user.getUserId());
 				JsonArray hostingEventsJson = new JsonArray();
 				for (int i = 0; i < hostingEvents.size(); i++) {
-					hostingEventsJson.add(LeapsUtils.generateJsonEvent(hostingEvents.get(i)));
+					hostingEventsJson.add(LeapsUtils.generateJsonEvent(hostingEvents.get(i), null));
 				}
 				response.add("hosting_events", hostingEventsJson);
 				
@@ -476,7 +489,13 @@ public class UserController {
 			}
 			
 			orderResponse.add("trainers", filteredEventsJson);
-			
+
+			if (Configuration.debugMode) {
+				logger.info("------------------------------------------");
+				logger.info("Order Response:");
+				logger.info(orderResponse.toString());
+				logger.info("------------------END---------------------");
+			}
 			return orderResponse.toString();
 		} catch (InvalidInputParamsException iip) {
 			try {
@@ -492,9 +511,30 @@ public class UserController {
 			} catch (IOException ioe2) {
 				return null;
 			}
-		}catch (IOException e) {
+		} catch (EventException ee) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (ImageException ie) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ie.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (IOException e) {
 			return e.toString();
-		} 
+		}
 	}
 	
 	/**
@@ -552,50 +592,51 @@ public class UserController {
 	public String resetPassword(HttpServletRequest req, HttpServletResponse resp) throws Exception {
 		String email;
 		try (Scanner sc = new Scanner(req.getInputStream())) {
-			StringBuilder sb = new StringBuilder();
-			while (sc.hasNext()) {
-				sb.append(sc.nextLine());
-			}
+//			StringBuilder sb = new StringBuilder();
+//			while (sc.hasNext()) {
+//				sb.append(sc.nextLine());
+//			}
+//			
+//			String requestData = sb.toString();
+//			
+//			JsonParser parser = new JsonParser();
+//			JsonObject obj = parser.parse(requestData).getAsJsonObject();
+//
+//			if (obj.get("email_address") == null) {
+//				throw new InvalidInputParamsException(Configuration.INVALID_INPUT_PAREMETERS);
+//			}
+//			
+//			email = obj.get("email_address").getAsString();
+//			
+//			if(!UserDao.getInstance().resetPassword(email)) {
+//				// TODO: remove the unauthorized exception
+//				// in all cases it will return ok status at the moment
+////				throw new UserException(Configuration.INVALID_EMAIL);
+//			}
 			
-			String requestData = sb.toString();
-			
-			JsonParser parser = new JsonParser();
-			JsonObject obj = parser.parse(requestData).getAsJsonObject();
-
-			if (obj.get("email_address") == null) {
-				throw new InvalidInputParamsException(Configuration.INVALID_INPUT_PAREMETERS);
-			}
-			
-			email = obj.get("email_address").getAsString();
-			
-			if(!UserDao.getInstance().resetPassword(email)) {
-				// TODO: remove the unauthorized exception
-				// in all cases it will return ok status at the moment
-//				throw new UserException(Configuration.INVALID_EMAIL);
-			}
-			
+			EmailSender.sendEmail();
 			return HttpStatus.OK.toString();
-		} catch (InvalidInputParamsException iip) {
-			try {
-				resp.sendError(HttpServletResponse.SC_BAD_REQUEST, iip.getMessage());
-				return null;
-			} catch (IOException ioe2) {
-				return null;
-			}
-		} catch (UserException ue) {
-			try {
-				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, ue.getMessage());
-				return null;
-			} catch (IOException ioe1) {
-				return null;
-			}
-		} catch (IOException ioe) {
-			try {
-				resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, ioe.getMessage());
-				return null;
-			} catch (IOException ioe2) {
-				return null;
-			}
+//		} catch (InvalidInputParamsException iip) {
+//			try {
+//				resp.sendError(HttpServletResponse.SC_BAD_REQUEST, iip.getMessage());
+//				return null;
+//			} catch (IOException ioe2) {
+//				return null;
+//			}
+//		} catch (UserException ue) {
+//			try {
+//				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, ue.getMessage());
+//				return null;
+//			} catch (IOException ioe1) {
+//				return null;
+//			}
+//		} catch (IOException ioe) {
+//			try {
+//				resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, ioe.getMessage());
+//				return null;
+//			} catch (IOException ioe2) {
+//				return null;
+//			}
 		} catch (Exception e) {
 			try {
 				resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
@@ -615,8 +656,7 @@ public class UserController {
 	public String getFeedTrainers(HttpServletRequest req, HttpServletResponse resp) {
 		
 		try {
-			User user;
-			
+			long token = UserDao.getInstance().checkIfTokenIsValid(req.getHeader("Authorization"));
 			// TODO: add try catch clauses at least for the DB
 			
 			List<User> trainersWithMostEventsCreated = DBUserDao.getInstance().getAllTrainersWithMostEventsCreated();
@@ -624,68 +664,7 @@ public class UserController {
 			JsonArray response = new JsonArray();
 			
 			for (int i = 0; i < trainersWithMostEventsCreated.size(); i++) {
-				user = trainersWithMostEventsCreated.get(i);
-				
-				JsonObject userJson = new JsonObject();
-				userJson.addProperty("user_id", user.getUserId());
-				userJson.addProperty("username", user.getUsername());
-				
-				int userAttendedEvents = DBUserDao.getInstance().getAllEventCountThatUserHasAttended(user.getUserId());
-				userJson.addProperty("attended_events", userAttendedEvents);
-				
-				userJson.addProperty("description", user.getDescription());
-				userJson.addProperty("email_address", user.getEmail());
-				userJson.addProperty("age", user.getAge());
-				userJson.addProperty("gender", user.getGender());
-				userJson.addProperty("location", user.getLocation());
-				userJson.addProperty("max_distance_setting", user.getMaxDistanceSetting());
-				userJson.addProperty("first_name", user.getFirstName());
-				userJson.addProperty("last_name", user.getLastName());
-				userJson.addProperty("birthday", user.getBirthday());
-				userJson.addProperty("profile_image_url", user.getProfileImageUrl());
-				userJson.addProperty("is_trainer", user.isTrainer());
-				userJson.addProperty("long_description", user.getLongDescription());
-				userJson.addProperty("years_of_training", user.getYearsOfTraining());
-				userJson.addProperty("session_price", user.getSessionPrice());
-	
-				// TODO: get followed by - in stage 2
-				JsonArray followedByJson = new JsonArray();
-				userJson.add("followed_by", followedByJson);
-				
-				List<Event> attendingEvents = DBUserDao.getInstance().getAllAttendingEventsForUser(user.getUserId());
-				JsonArray attendingEventsJson = new JsonArray();
-				
-				for (int k = 0; k < attendingEvents.size(); k++) {
-					attendingEventsJson.add(LeapsUtils.generateJsonEvent(attendingEvents.get(k)));
-				}
-				userJson.add("attending_events", attendingEventsJson);
-				
-				List<Event> hostingEvents = DBUserDao.getInstance().getAllHostingEventsForUser(user.getUserId());
-				JsonArray hostingEventsJson = new JsonArray();
-				for (int m = 0; m < hostingEvents.size(); m++) {
-					hostingEventsJson.add(LeapsUtils.generateJsonEvent(hostingEvents.get(m)));
-				}
-				userJson.add("hosting_events", hostingEventsJson);
-				
-				JsonArray specialtiesJson = new JsonArray();
-				List<Tag> specialties = EventDao.getInstance().getAllUserSpecialties(user.getUserId());
-				for (int b = 0; b < specialties.size(); b++) {
-					specialtiesJson.add(specialties.get(b).getName());
-				}
-				userJson.add("specialties", specialtiesJson);
-				
-				List<Image> userImages = DBUserDao.getInstance().getAllUserImages(user.getUserId());
-				JsonArray userImagesJson = new JsonArray();
-				
-				for (int c = 0; c < userImages.size(); c++) {
-					JsonObject obj = new JsonObject();
-					obj.addProperty("image_id", userImages.get(c).getImageId());
-					obj.addProperty("image_url", userImages.get(c).getImageName());
-					userImagesJson.add(obj);
-				}
-				userJson.add("images", userImagesJson);
-				
-				response.add(userJson);
+				response.add(LeapsUtils.generateJsonUser(trainersWithMostEventsCreated.get(i), token));
 			}
 	
 			if (Configuration.debugMode) {
@@ -697,6 +676,27 @@ public class UserController {
 		} catch (UserException ue) {
 			try {
 				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, ue.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (EventException ee) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (ImageException ie) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ie.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
 				return null;
 			} catch (IOException ioe) {
 				return null;
@@ -763,14 +763,14 @@ public class UserController {
 			JsonArray pastJson = new JsonArray();
 			if (pastEvents != null) {
 				for (int i = 0; i < pastEvents.size(); i++) {
-					pastJson.add(LeapsUtils.generateJsonEvent(pastEvents.get(i)));
+					pastJson.add(LeapsUtils.generateJsonEvent(pastEvents.get(i), null));
 				}
 			}
 			
 			
 			JsonArray futureJson = new JsonArray();
 			for (int i = 0; i < futureEvents.size(); i++) {
-				futureJson.add(LeapsUtils.generateJsonEvent(futureEvents.get(i)));
+				futureJson.add(LeapsUtils.generateJsonEvent(futureEvents.get(i), null));
 			}
 			
 			response.add("past", pastJson);
@@ -796,6 +796,27 @@ public class UserController {
 				resp.sendError(HttpServletResponse.SC_BAD_REQUEST, Configuration.INVALID_INPUT_PAREMETERS);
 				return null;
 			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (EventException ee) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (ImageException ie) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ie.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
+				return null;
+			} catch (IOException ioe) {
 				return null;
 			}
 		} catch (IOException e) {
@@ -861,7 +882,7 @@ public class UserController {
 			JsonArray response = new JsonArray();
 			if (pastEvents != null) {
 				for (int i = 0; i < pastEvents.size(); i++) {
-					response.add(LeapsUtils.generateJsonEvent(pastEvents.get(i)));
+					response.add(LeapsUtils.generateJsonEvent(pastEvents.get(i), null));
 				}
 			}
 			
@@ -885,6 +906,27 @@ public class UserController {
 				resp.sendError(HttpServletResponse.SC_BAD_REQUEST, Configuration.INVALID_INPUT_PAREMETERS);
 				return null;
 			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (EventException ee) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (ImageException ie) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ie.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
+				return null;
+			} catch (IOException ioe) {
 				return null;
 			}
 		} catch (IOException e) {
@@ -949,7 +991,7 @@ public class UserController {
 			
 			JsonArray response = new JsonArray();
 			for (int i = 0; i < futureEvents.size(); i++) {
-				response.add(LeapsUtils.generateJsonEvent(futureEvents.get(i)));
+				response.add(LeapsUtils.generateJsonEvent(futureEvents.get(i), null));
 			}
 
 			if (Configuration.debugMode) {
@@ -977,6 +1019,27 @@ public class UserController {
 				resp.sendError(HttpServletResponse.SC_BAD_REQUEST, Configuration.INVALID_INPUT_PAREMETERS);
 				return null;
 			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (EventException ee) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (ImageException ie) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ie.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
+				return null;
+			} catch (IOException ioe) {
 				return null;
 			}
 		} catch (IOException e) {
@@ -1048,12 +1111,12 @@ public class UserController {
 
 			JsonArray pastJson = new JsonArray();
 			for (int i = 0; i < pastEvents.size(); i++) {
-				pastJson.add(LeapsUtils.generateJsonEvent(pastEvents.get(i)));
+				pastJson.add(LeapsUtils.generateJsonEvent(pastEvents.get(i), null));
 			}
 			
 			JsonArray futureJson = new JsonArray();
 			for (int i = 0; i < futureEvents.size(); i++) {
-				futureJson.add(LeapsUtils.generateJsonEvent(futureEvents.get(i)));
+				futureJson.add(LeapsUtils.generateJsonEvent(futureEvents.get(i), null));
 			}
 			
 			
@@ -1080,6 +1143,27 @@ public class UserController {
 				resp.sendError(HttpServletResponse.SC_BAD_REQUEST, Configuration.INVALID_INPUT_PAREMETERS);
 				return null;
 			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (EventException ee) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (ImageException ie) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ie.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
+				return null;
+			} catch (IOException ioe) {
 				return null;
 			}
 		} catch (IOException e) {
@@ -1146,7 +1230,7 @@ public class UserController {
 			
 			JsonArray response = new JsonArray();
 			for (int i = 0; i < pastEvents.size(); i++) {
-				response.add(LeapsUtils.generateJsonEvent(pastEvents.get(i)));
+				response.add(LeapsUtils.generateJsonEvent(pastEvents.get(i), null));
 			}
 			
 			return response.toString();
@@ -1169,6 +1253,27 @@ public class UserController {
 				resp.sendError(HttpServletResponse.SC_BAD_REQUEST, Configuration.INVALID_INPUT_PAREMETERS);
 				return null;
 			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (EventException ee) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (ImageException ie) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ie.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
+				return null;
+			} catch (IOException ioe) {
 				return null;
 			}
 		} catch (IOException e) {
@@ -1235,7 +1340,7 @@ public class UserController {
 			
 			JsonArray response = new JsonArray();
 			for (int i = 0; i < futureEvents.size(); i++) {
-				response.add(LeapsUtils.generateJsonEvent(futureEvents.get(i)));
+				response.add(LeapsUtils.generateJsonEvent(futureEvents.get(i), null));
 			}
 			
 			return response.toString();
@@ -1258,6 +1363,27 @@ public class UserController {
 				resp.sendError(HttpServletResponse.SC_BAD_REQUEST, Configuration.INVALID_INPUT_PAREMETERS);
 				return null;
 			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (EventException ee) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (ImageException ie) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ie.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
+				return null;
+			} catch (IOException ioe) {
 				return null;
 			}
 		} catch (IOException e) {
@@ -1321,6 +1447,20 @@ public class UserController {
 			} catch (IOException ioe2) {
 				return null;
 			}
+		} catch (ImageException ie) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ie.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
 		} catch (IOException ioe) {
 			try {
 				resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, ioe.getMessage());
@@ -1349,9 +1489,7 @@ public class UserController {
 				throw new InvalidInputParamsException(Configuration.INVALID_INPUT_PAREMETERS);
 			}
 			
-			UserDao.getInstance().unfollowUser(token, obj.get("user_id").getAsInt());
-			
-			return HttpStatus.OK.toString();
+			return UserDao.getInstance().unfollowUser(token, obj.get("user_id").getAsInt()).toString();
 		} catch (AuthorizationException ae) {
 			try {
 				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, ae.getMessage());
@@ -1361,7 +1499,7 @@ public class UserController {
 			}
 		} catch (InvalidInputParamsException iipe) {
 			try {
-				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, iipe.getMessage());
+				resp.sendError(HttpServletResponse.SC_CONFLICT, iipe.getMessage());
 				return null;
 			} catch (IOException ioe2) {
 				return null;
@@ -1380,11 +1518,103 @@ public class UserController {
 			} catch (IOException ioe2) {
 				return null;
 			}
-		}catch (IOException ioe) {
+		} catch (UserException ue) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ue.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (ImageException ie) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ie.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (IOException ioe) {
 			try {
 				resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, ioe.getMessage());
 				return null;
 			} catch (IOException ioe2) {
+				return null;
+			}
+		}
+	}
+	
+	/**
+	 * Get all user followers
+	 */
+	@RequestMapping(method = RequestMethod.GET, value = "/followers/{user_id}")
+	public String getFollowers(HttpServletRequest req, HttpServletResponse resp, @PathVariable("user_id") String user_id) {
+		try {
+			return UserDao.getInstance().getAllFollowers(user_id).toString();
+		} catch (EventException ee) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (UserException ue) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ue.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (UserNotFoundException unfe) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, unfe.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (InvalidInputParamsException iipe) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, iipe.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		}
+	}
+
+	
+	/**
+	 * Get all comments for a specific trainer
+	 */
+	@RequestMapping(method = RequestMethod.GET, value = "/comments/{user_id}/{page}/{limit}")
+	public String getTrainerComments(HttpServletRequest req, HttpServletResponse resp, @PathVariable("user_id") long user_id, 
+									 @PathVariable("page") int page, @PathVariable("limit") int limit) {
+		try {
+			return UserDao.getInstance().getTrainerComments(user_id, page, limit).toString();
+		} catch (EventException ee) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (UserException ue) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ue.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		}catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
+				return null;
+			} catch (IOException ioe) {
 				return null;
 			}
 		}

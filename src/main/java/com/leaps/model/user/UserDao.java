@@ -9,10 +9,16 @@ import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.amazonaws.services.cognitoidp.model.UserNotFoundException;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.leaps.interfaces.IUserDao;
 import com.leaps.model.db.DBUserDao;
+import com.leaps.model.event.Event;
+import com.leaps.model.exceptions.AuthorizationException;
 import com.leaps.model.exceptions.EventException;
+import com.leaps.model.exceptions.ImageException;
+import com.leaps.model.exceptions.InvalidInputParamsException;
+import com.leaps.model.exceptions.TagException;
 import com.leaps.model.exceptions.UserException;
 import com.leaps.model.token.Token;
 import com.leaps.model.token.TokenManager;
@@ -76,7 +82,7 @@ public class UserDao implements IUserDao {
 		}
 	}
 	
-	public Map<Token,User> getUserFromDbOrCache(String userData, String pass, String facebookId, String googleId) {
+	public Map<Token,User> getUserFromDbOrCache(String userData, String pass, String facebookId, String googleId) throws UserException {
 		Map<Token, User> cachedUser = getUserFromCache(userData, pass, facebookId, googleId);
 		
 		if (cachedUser == null || cachedUser.isEmpty()) {
@@ -151,7 +157,7 @@ public class UserDao implements IUserDao {
 		return user;
 	}
 
-	private String generateUsername(String email) {
+	private String generateUsername(String email) throws UserException {
 		Random rand = new Random();
 		
 		String tempUsername = email;
@@ -257,7 +263,7 @@ public class UserDao implements IUserDao {
 		return null;
 	}
 	
-	public JsonObject followUser(long token, int followedUserId) throws UserNotFoundException, EventException, UserException {
+	public JsonObject followUser(long token, int followedUserId) throws UserNotFoundException, EventException, UserException, ImageException, TagException {
 		Map<Token, User> cachedUser = getUserFromCache(token);
 		
 		if (cachedUser == null) {
@@ -271,11 +277,13 @@ public class UserDao implements IUserDao {
 		}
 		
 		DBUserDao.getInstance().followUser(user.getUserId(), followedUserId);
+		// we return the followed user
+		User followedUser = DBUserDao.getInstance().getUserFromDbById(followedUserId);
 		
-		return LeapsUtils.generateJsonUser(user);
+		return LeapsUtils.generateJsonUser(followedUser, token);
 	}
 
-	public void unfollowUser(long token, int followedUserId) throws UserNotFoundException, EventException {
+	public JsonObject unfollowUser(long token, int followedUserId) throws UserNotFoundException, EventException, UserException, ImageException, TagException {
 		Map<Token, User> cachedUser = getUserFromCache(token);
 		
 		if (cachedUser == null) {
@@ -289,5 +297,128 @@ public class UserDao implements IUserDao {
 		}
 		
 		DBUserDao.getInstance().unfollowUser(user.getUserId(), followedUserId);
+
+		// we return the unfollowed user
+		User followedUser = DBUserDao.getInstance().getUserFromDbById(followedUserId);
+		
+		return LeapsUtils.generateJsonUser(followedUser, token);
+	}
+
+	public long checkIfTokenIsValid(String token) {
+		if (token == null || token.isEmpty() || !LeapsUtils.isNumber(token)) {
+			return 0;
+		}
+
+		long checker = Long.valueOf(token);
+		
+		return UserDao.getInstance().getUserFromCache(checker) != null ? checker : 0;
+	}
+
+	public JsonObject getAllFollowers(String id) throws EventException, UserNotFoundException, UserException, InvalidInputParamsException {
+		if (id == null || id.isEmpty() || !LeapsUtils.isNumber(id)) {
+			throw new InvalidInputParamsException(Configuration.INVALID_INPUT_PAREMETERS);
+		}
+		
+		User user = getUserFromDbOrCacheById(Long.valueOf(id));
+		if (user == null) {
+			throw new UserNotFoundException(Configuration.USER_DOES_NOT_EXIST);
+		}
+		
+		return getAllUserFollowers(user);
+	}
+
+	public JsonObject getAllUserFollowers(User user) throws EventException, UserException {
+		JsonObject followedByJson = new JsonObject();
+		JsonArray followingJson = new JsonArray();
+		JsonArray othersJson = new JsonArray();
+		
+		Map<String, List<Long>> users = DBUserDao.getInstance().getFollowingUsers(user.getUserId());
+		List<Long> follower = null;
+		List<Long> followed = null;
+		for (Map.Entry<String, List<Long>> temp : users.entrySet()) {
+			if (temp.getKey().equals("follower")) {
+				follower = temp.getValue();
+			} else {
+				followed = temp.getValue();
+			}
+		}
+		
+		for (int fod = 0; fod < follower.size(); fod++) {
+//			boolean match = false;
+			User tempUser = DBUserDao.getInstance().getUserFromDbById(follower.get(fod));
+			JsonObject jsonUser = new JsonObject();
+			jsonUser.addProperty("user_id", tempUser.getUserId());
+			jsonUser.addProperty("user_name", (tempUser.getFirstName() + " " + tempUser.getLastName()).trim());
+			jsonUser.addProperty("user_image_url", tempUser.getProfileImageUrl());
+			
+			othersJson.add(jsonUser);
+//			
+//			for (int fol = 0; fol < followed.size(); fol++) {
+//				if (follower.get(fod) == followed.get(fol)) {
+//					follower.remove(fod);
+//					fod--;
+//					match = true;
+//					break;
+//				}
+//			}
+//			
+//			if (!match) {
+//				othersJson.add(jsonUser);
+//			}
+		}
+		
+		for (int fol = 0; fol < followed.size(); fol++) {
+			JsonObject jsonUser = new JsonObject();
+			User tempUser = DBUserDao.getInstance().getUserFromDbById(followed.get(fol));
+			jsonUser.addProperty("user_id", tempUser.getUserId());
+			jsonUser.addProperty("user_name", (tempUser.getFirstName() + " " + tempUser.getLastName()).trim());
+			jsonUser.addProperty("user_image_url", tempUser.getProfileImageUrl());
+			followingJson.add(jsonUser);
+		}
+		
+		
+		followedByJson.add("following", followingJson);		
+		followedByJson.add("others", othersJson);
+		
+		return followedByJson;
+	}
+
+	public JsonArray getTrainerComments(long userId, int page, int limit) throws EventException, UserException, TagException {
+		JsonArray response = new JsonArray();
+		
+		List<Long> rateIds = DBUserDao.getInstance().getRatesForTrainer(userId, page, limit);
+		for (int i = 0; i < rateIds.size(); i++) {
+			response.add(LeapsUtils.generateJsonComment(rateIds.get(i)));
+		}
+		
+		return response;
+	}
+
+	public int getFollowingCount(Long userId) throws EventException {
+		return DBUserDao.getInstance().getFollowingCount(userId);
+	}
+
+	public int getFollowersCount(Long userId) throws EventException {
+		return DBUserDao.getInstance().getFollowersCount(userId);
+	}
+
+	public List<Integer> getAllUserRatings(Long userId) throws EventException {
+		return DBUserDao.getInstance().getAllUserRatings(userId);
+	}
+
+	public boolean canRate(Event event, Long token) throws UserException {
+		boolean canRate = true;
+		User user = null;
+		
+		if (token != null) {
+			Map<Token, User> cachedUser = UserDao.getInstance().getUserFromCache(token);
+			if (cachedUser != null) {
+				for(Map.Entry<Token, User> map : cachedUser.entrySet()) {
+					canRate = DBUserDao.getInstance().canRate(map.getValue().getUserId(), event.getEventId());
+				}
+			}
+		}
+		
+		return canRate;
 	}
 }

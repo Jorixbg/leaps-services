@@ -13,31 +13,30 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.leaps.controller.UserController;
 import com.leaps.interfaces.IDBUserDao;
 import com.leaps.model.event.Event;
 import com.leaps.model.event.EventDao;
 import com.leaps.model.event.Tag;
 import com.leaps.model.exceptions.EventException;
+import com.leaps.model.exceptions.ImageException;
+import com.leaps.model.exceptions.TagException;
 import com.leaps.model.exceptions.UserException;
 import com.leaps.model.image.Image;
 import com.leaps.model.image.ImageDao;
 import com.leaps.model.rate.Rate;
+import com.leaps.model.rate.RateDao;
 import com.leaps.model.user.User;
 import com.leaps.model.user.UserDao;
 import com.leaps.model.utils.Configuration;
-import com.leaps.model.utils.LeapsUtils;
+import com.leaps.model.utils.DebuggingManager;
 
 public class DBUserDao implements IDBUserDao {
 
 	private static final Logger logger = LoggerFactory.getLogger(DBUserDao.class);
 	
 	private static DBUserDao instance;
-	private DBManager manager;
 	
-	private DBUserDao() {
-		manager = DBManager.getInstance();
-	}
+	private DBUserDao() {}
 	
 	public static DBUserDao getInstance(){
 		if(instance == null)
@@ -45,9 +44,32 @@ public class DBUserDao implements IDBUserDao {
 		return instance;
 	}
 	
+	// close all connections method
+	private void closeResources(PreparedStatement preparedStatement, ResultSet rs, Connection dbConnection) {
+		if (rs != null) {
+			try {
+				rs.close();
+			} catch (SQLException e) {}
+		}
+		
+		if (preparedStatement != null) {
+			try {
+				preparedStatement.close();
+			} catch (SQLException e) {}
+		}
+		
+		// currently disabled
+//		if (dbConnection != null) {
+//			try {
+//				dbConnection.close();
+//			} catch (SQLException e) {}
+//		}
+	}
+	
 	public boolean checkIfUserExistInDB(String userData) {
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		String selectSQL = "SELECT user_id FROM leaps.users WHERE email_address = ? OR username = ?";
 		
 		try {
@@ -61,21 +83,28 @@ public class DBUserDao implements IDBUserDao {
 				logger.info("SQL Statement: " + preparedStatement.toString());
 			}
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
 				return true;
 			}
 			
 		} catch (Exception e) {
-			// TODO
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			
 			return true;
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
+		
 		return false;
 	}
-	
+
 	public boolean checkIfUserExistInDBByEmail(String email) {
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		String selectSQL = "SELECT user_id FROM leaps.users WHERE email_address = ?";
 		
 		try {
@@ -88,22 +117,28 @@ public class DBUserDao implements IDBUserDao {
 				logger.info("SQL Statement: " + preparedStatement.toString());
 			}
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
 				return true;
 			}
 			
 		} catch (Exception e) {
-			// TODO
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
 			return true;
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
+		
 		return false;
 	}
 	
-	public User getUserFromDb(String userData, String pass, String facebookId, String googleId) {
+	public User getUserFromDb(String userData, String pass, String facebookId, String googleId) throws UserException {
 		User user = null;
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		String selectSQL = "SELECT * FROM leaps.users WHERE (username = ? OR email_address = ?) AND password = ?";
 		
 		if (facebookId != null) {
@@ -131,7 +166,7 @@ public class DBUserDao implements IDBUserDao {
 				logger.info("SQL Statement: " + preparedStatement.toString());
 			}
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
 				user = UserDao.getInstance().createNewUser(rs.getInt("user_id"), rs.getString("username"), rs.getString("email_address"), rs.getInt("age"), rs.getString("gender"),
 						   rs.getString("location"), rs.getInt("max_distance_setting"), rs.getString("first_name"), rs.getString("last_name"), 
@@ -142,10 +177,14 @@ public class DBUserDao implements IDBUserDao {
 			
 			return user;
 		} catch (Exception e) {
-			// TODO
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			
+			throw new UserException(Configuration.NO_USER_FOUND);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return null;
 	}
 	
 	public Long insertUserIntoDB(String username, String pass, String email, String firstName, String lastName, Long birthday, String facebookId, String gogleId, int age) throws UserException {
@@ -153,6 +192,7 @@ public class DBUserDao implements IDBUserDao {
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet generatedKeys = null;
 		String selectSQL = "INSERT INTO leaps.users (username, password, email_address, first_name, last_name, birthday, facebook_id, google_id, age, max_distance_setting) VALUES ( ? , ? , ? , ? , ? , ? , ? , ? , ? , ?)";
 		try {
 			dbConnection = DBManager.getInstance().getConnection();
@@ -172,55 +212,48 @@ public class DBUserDao implements IDBUserDao {
 			
 			preparedStatement.execute();
 			
-			if (Configuration.debugMode) {
-				logger.info("SQL Statement: " + preparedStatement.toString());
-			}
-			
-			ResultSet generatedKeys = preparedStatement.getGeneratedKeys();
+			generatedKeys = preparedStatement.getGeneratedKeys();
             if (generatedKeys.next()) {
             	userId = generatedKeys.getLong(1);
-    			if (Configuration.debugMode) {
-    				logger.info("User Id: " + userId);
-    			}
             }
             
             return userId;
 		} catch (Exception e) {
-			throw new UserException(e.getMessage());
-		} finally {
-			try {
-				preparedStatement.close();
-			} catch (SQLException e) {
-				e.printStackTrace();
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
 			}
+			
+			throw new UserException(Configuration.CANNOT_INSERT_USER_INTO_DB);
+		} finally {
+			closeResources(preparedStatement, generatedKeys, dbConnection);
 		}
 	}
 	
-	public List<String> findSimilarUsernamesFromDB(String username) {
+	public List<String> findSimilarUsernamesFromDB(String username) throws UserException {
 		List<String> returnedData = new ArrayList<String>();
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet dbUsernames = null;
 		String selectSQL = "SELECT username FROM leaps.users WHERE username LIKE ?";
 		
 		try {
 			dbConnection = DBManager.getInstance().getConnection();
 			preparedStatement = dbConnection.prepareStatement(selectSQL);
 			preparedStatement.setString(1, username);
-
-			if (Configuration.debugMode) {
-				logger.info("SQL Statement: " + preparedStatement.toString());
-			}
 			
-			ResultSet dbUsernames = preparedStatement.executeQuery();
+			dbUsernames = preparedStatement.executeQuery();
             if (dbUsernames.next()) {
             	returnedData.add(dbUsernames.getString(1));
-            	if (Configuration.debugMode) {
-    				logger.info("Username: " + dbUsernames.getString(1));
-    			}
             }
 		} catch (Exception e) {
-			System.out.println(e.getMessage());
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			
+			throw new UserException(Configuration.NO_USER_FOUND);
+		} finally {
+			closeResources(preparedStatement, dbUsernames, dbConnection);
 		}
 		
 		return returnedData;
@@ -237,57 +270,67 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement.setString(1, pass);
 			preparedStatement.setString(2, email);
 			preparedStatement.execute();
-
-			if (Configuration.debugMode) {
-				logger.info("SQL Statement: " + preparedStatement.toString());
-			}
 			
 			return true;
 		} catch (Exception e) {
-			throw new UserException(e.getMessage());
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			
+			throw new UserException(Configuration.NO_USER_FOUND);
+		} finally {
+			closeResources(preparedStatement, null, dbConnection);
 		}
 	}
 
-	public List<Tag> getUserTokens(long ownerId, int tokenSizeForCreateEvent) {
-		List<Tag> tags = new ArrayList<Tag>();
-		Connection dbConnection = null;
-		PreparedStatement preparedStatement = null;
-		String selectSQL = "SELECT s.name FROM leaps.specialties s "
-						 + "LEFT JOIN leaps.users u ON s.user_id = u.user_id "
-						 + "WHERE s.user_id = ? LIMIT ?";
-		
-		try {
-			dbConnection = DBManager.getInstance().getConnection();
-			preparedStatement = dbConnection.prepareStatement(selectSQL);
-			preparedStatement.setLong(1, ownerId);
-			preparedStatement.setInt(2, tokenSizeForCreateEvent);
-
-			if (Configuration.debugMode) {
-				logger.info("SQL Statement: " + preparedStatement.toString());
-			}
-			
-			ResultSet rs = preparedStatement.executeQuery();
-            if (rs.next()) {
-            	tags.add(EventDao.getInstance().createNewTag(rs.getInt("specialty_id"), rs.getString("name"), rs.getInt("user_id")));
-            }
-            
-			if (Configuration.debugMode) {
-				LeapsUtils.logRetrievedTagsFromTheDB(tags);
-			}
-			
-			return tags;
-		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
-		}
-		return tags;
-	}
+	// TODO: temprorary commenting an unused order
+//	public List<Tag> getUserTokens(long ownerId, int tokenSizeForCreateEvent) {
+//		List<Tag> tags = new ArrayList<Tag>();
+//		Connection dbConnection = null;
+//		PreparedStatement preparedStatement = null;
+//		String selectSQL = "SELECT s.name FROM leaps.specialties s "
+//						 + "LEFT JOIN leaps.users u ON s.user_id = u.user_id "
+//						 + "WHERE s.user_id = ? LIMIT ?";
+//		
+//		try {
+//			dbConnection = DBManager.getInstance().getConnection();
+//			preparedStatement = dbConnection.prepareStatement(selectSQL);
+//			preparedStatement.setLong(1, ownerId);
+//			preparedStatement.setInt(2, tokenSizeForCreateEvent);
+//
+//			if (Configuration.debugMode) {
+//				logger.info("SQL Statement: " + preparedStatement.toString());
+//			}
+//			
+//			ResultSet rs = preparedStatement.executeQuery();
+//            if (rs.next()) {
+//            	tags.add(EventDao.getInstance().createNewTag(rs.getInt("specialty_id"), rs.getString("name"), rs.getInt("user_id")));
+//            }
+//            
+//			if (Configuration.debugMode) {
+//				LeapsUtils.logRetrievedTagsFromTheDB(tags);
+//			}
+//			
+//			return tags;
+//		} catch (Exception e) {
+//			if (Configuration.debugMode) {
+//				logger.error(e.getMessage());
+//			}
+//			
+//			throw new UserException(Configuration.INVALID_TOKEN);
+//		} finally {
+//			closeResources(preparedStatement, null, dbConnection);
+//		}
+//		
+//		return tags;
+//	}
 
 	public long createNewEvent(String title, String description, long date, long timeFrom, long timeTo, long ownerId, double latitude, 
-							   double longitute, int priceFrom, String address, int freeSlots, Long dateCreated) {
+							   double longitute, int priceFrom, String address, int freeSlots, Long dateCreated) throws EventException {
 		long eventId = -1;
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet generatedKeys = null;
 		
 		String selectSQL = "INSERT INTO leaps.events (title, description, date, time_from, time_to, owner_id, coord_lat, coord_lnt, "
 												   + "price_from, address, free_slots, date_created, event_image_url)"
@@ -315,25 +358,32 @@ public class DBUserDao implements IDBUserDao {
 				logger.info("SQL Statement: " + preparedStatement.toString());
 			}
 			
-			ResultSet generatedKeys = preparedStatement.getGeneratedKeys();
+			generatedKeys = preparedStatement.getGeneratedKeys();
             if (generatedKeys.next()) {
             	eventId = generatedKeys.getLong(1);
             }
             
             return eventId;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			
+			throw new EventException(Configuration.CANNOT_CREATE_NEW_EVENT);
+		} finally {
+			closeResources(preparedStatement, generatedKeys, dbConnection);
 		}
-		
-		return eventId;
 	}
 
-	public boolean addTagsToTheDB(List<String> tags, long eventId) {
+	public boolean addTagsToTheDB(List<String> tags, long eventId) throws EventException {
 		boolean success = true;
 		List<Tag> dbTags = new ArrayList<Tag>();
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		PreparedStatement secondPreparedStatement = null;
+		PreparedStatement statement = null;
+		ResultSet generatedKeys = null;
+		ResultSet rs = null;
 		
 		StringBuilder selectTagsStatement = new StringBuilder("Select tag_id, name FROM leaps.tags WHERE name IN (");
 		for (int i = 0; i < tags.size(); i++) {
@@ -353,124 +403,91 @@ public class DBUserDao implements IDBUserDao {
 				preparedStatement.setString(i+1, tags.get(i));
 			}
 			
-        	ResultSet generatedKeys = preparedStatement.executeQuery();
-
-			if (Configuration.debugMode) {
-				logger.info("SQL Statement: " + preparedStatement.toString());
-			}
-			
+        	generatedKeys = preparedStatement.executeQuery();
         	while (generatedKeys.next()) {
             	dbTags.add(EventDao.getInstance().createNewTag(generatedKeys.getInt(1), generatedKeys.getString(2)));
         	}
-            
-			if (Configuration.debugMode) {
-				logger.info("check if some of the tags already exist in the database 'tags' schema and retreive their ids");
-				LeapsUtils.logRetrievedTagsFromTheDB(dbTags);
-			}
-		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
-			return false;
-		}
-		
-		List<String> tempTags = new ArrayList<String>();
-		
-		// remove the tags from the tags array that ids were found 
-		for (int i = 0; i < tags.size(); i++) {
-			for (int k = 0; k < dbTags.size(); k++) {
-				if (tags.get(i).equals(dbTags.get(k).getName())) {
-					break;
-				}
-				
-				if (k + 1 >= dbTags.size()) {
-					tempTags.add(tags.get(i));
-				}
-			}
-		}
-		
-		if (dbTags.size() == 0) {
-			tempTags = tags;
-		}
-		
-		if (tempTags.size() != 0) {
-			
-			StringBuilder insertTagsStatement = new StringBuilder("INSERT INTO leaps.tags (name) VALUES ");
-			
-			for (int i = 0; i < tempTags.size(); i++) {
-				insertTagsStatement.append("( ? )");
-				if (i + 1 < tempTags.size()) {
-					insertTagsStatement.append(", ");
-				}
-			}
-			
-			// add the tags that are not registered in the db in 'tags' schema and get their ids
-			try {
-				int index = 0;
-				preparedStatement = dbConnection.prepareStatement(insertTagsStatement.toString(), Statement.RETURN_GENERATED_KEYS);
-				for (int i = 0; i < tempTags.size(); i++) {
-					preparedStatement.setString(i + 1, tempTags.get(i));
-				}
-				preparedStatement.execute();
 
-				if (Configuration.debugMode) {
-					logger.info("SQL Statement: " + preparedStatement.toString());
+			// remove the tags from the tags array that ids were found
+			List<String> tempTags = new ArrayList<String>();
+			for (int i = 0; i < tags.size(); i++) {
+				for (int k = 0; k < dbTags.size(); k++) {
+					if (tags.get(i).equals(dbTags.get(k).getName())) {
+						break;
+					}
+					
+					if (k + 1 >= dbTags.size()) {
+						tempTags.add(tags.get(i));
+					}
+				}
+			}
+			
+			if (dbTags.size() == 0) {
+				tempTags = tags;
+			}
+		
+			if (tempTags.size() != 0) {
+				StringBuilder insertTagsStatement = new StringBuilder("INSERT INTO leaps.tags (name) VALUES ");
+				for (int i = 0; i < tempTags.size(); i++) {
+					insertTagsStatement.append("( ? )");
+					if (i + 1 < tempTags.size()) {
+						insertTagsStatement.append(", ");
+					}
 				}
 				
-				ResultSet rs = preparedStatement.getGeneratedKeys();
+				// add the tags that are not registered in the db in 'tags' schema and get their ids
+				int index = 0;
+				secondPreparedStatement = dbConnection.prepareStatement(insertTagsStatement.toString(), Statement.RETURN_GENERATED_KEYS);
+				for (int i = 0; i < tempTags.size(); i++) {
+					secondPreparedStatement.setString(i + 1, tempTags.get(i));
+				}
+				secondPreparedStatement.execute();
+				
+				rs = secondPreparedStatement.getGeneratedKeys();
 	            while (rs.next()) {
 	            	dbTags.add(EventDao.getInstance().createNewTag(rs.getInt(1), tags.get(index++)));
 	            }
 				
-				if (Configuration.debugMode) {
-					logger.info("add the tags that are not registered in the db in 'tags' schema and get their ids");
-					LeapsUtils.logRetrievedTagsFromTheDB(dbTags);
+				return true;
+			}
+
+			// add all tags in 'event_has_tags' schema
+			StringBuilder insertEventTagsStatement =  new StringBuilder("INSERT INTO leaps.event_has_tags ( tag_id, event_id ) VALUES");
+			for (int i = 0; i < dbTags.size(); i++) {
+				insertEventTagsStatement.append(" ( ?, ? )" );
+				if (i + 1 < dbTags.size()) {
+					insertEventTagsStatement.append(",");
 				}
-			} catch (Exception e) {
-				// TODO: proper exception
-				System.out.println(e.getMessage());
-				return false;
 			}
-		}
-		
-		
-		// add all tags in 'event_has_tags' schema
-		StringBuilder insertEventTagsStatement =  new StringBuilder("INSERT INTO leaps.event_has_tags ( tag_id, event_id ) VALUES");
-		for (int i = 0; i < dbTags.size(); i++) {
-			insertEventTagsStatement.append(" ( ?, ? )" );
-			if (i + 1 < dbTags.size()) {
-				insertEventTagsStatement.append(",");
-			}
-		}
-		
-		try {
-			preparedStatement = dbConnection.prepareStatement(insertEventTagsStatement.toString());
+
+			statement = dbConnection.prepareStatement(insertEventTagsStatement.toString());
 			int temp = 1;
 			for (int i = 0; i < dbTags.size(); i++) {
-				preparedStatement.setInt(temp++, dbTags.get(i).getTagId());
-				preparedStatement.setInt(temp++, (int) eventId);
+				statement.setInt(temp++, dbTags.get(i).getTagId());
+				statement.setInt(temp++, (int) eventId);
 			}
-			
-			preparedStatement.execute();
-
-			if (Configuration.debugMode) {
-				logger.info("add all tags in 'event_has_tags' schema");
-				logger.info("SQL Statement: " + preparedStatement.toString());
-			}
-			
+			statement.execute();
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
-			return false;
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			
+			throw new EventException(Configuration.CANNOT_INSERT_TAGS_IN_THE_DB);
+		} finally {
+			closeResources(preparedStatement, generatedKeys, dbConnection);
+			closeResources(secondPreparedStatement, rs, null);
+			closeResources(statement, null, null);
 		}
 		
 		return success;
 	}
 
-	public List<String> getMostPopularTags() {
+	public List<String> getMostPopularTags() throws TagException {
 		List<String> tags = new ArrayList<String>();
 				
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
 		String selectSQL = "SELECT t.name, count(eht.tag_id) FROM leaps.event_has_tags eht LEFT JOIN leaps.tags t ON t.tag_id = eht.tag_id GROUP BY eht.tag_id ORDER BY eht.tag_id ASC LIMIT ?";
 		try {
@@ -478,24 +495,21 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement = dbConnection.prepareStatement(selectSQL);
 			preparedStatement.setInt(1, Configuration.TAG_SELECT_LIMIT);
 
-			if (Configuration.debugMode) {
-				logger.info("SQL Statement: " + preparedStatement.toString());
-			}
-			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
             while (rs.next()) {
             	tags.add(rs.getString("name"));
             }
-
-			if (Configuration.debugMode) {
-				LeapsUtils.logRetrievedTagsFromTheDBAsString(tags);
-			}
+            
+			return tags;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
-		}
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
 		
-		return tags;
+			throw new TagException(Configuration.INVALID_TAG);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
+		}
 	}
 	
 	public User getUserFromDbById(long userId) throws UserException {
@@ -511,79 +525,59 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement.setLong(1, userId);
 			
 			rs = preparedStatement.executeQuery();
-
-			if (Configuration.debugMode) {
-				logger.info("SQL Statement: " + preparedStatement.toString());
-			}
-			
             while (rs.next()) {
             	user = UserDao.getInstance().createNewUser(userId, rs.getString("username"), rs.getString("email_address"), rs.getInt("age"), rs.getString("gender"), rs.getString("location"), 
             								rs.getInt("max_distance_setting"), rs.getString("first_name"), rs.getString("last_name"), rs.getLong("birthday"), rs.getString("description"), 
             								rs.getString("profile_image_url"), rs.getBoolean("is_trainer"), rs.getString("facebook_id"), rs.getString("google_id"), rs.getString("phone_number"), 
             								rs.getInt("session_price"), rs.getString("long_description"), rs.getInt("years_of_training"));
             }
+    		
+    		return user;
         } catch (Exception e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			
 			throw new UserException(Configuration.ERROR_RETREIVING_THE_USERS);
 		} finally {
-			if (preparedStatement != null) {
-				try {
-					preparedStatement.close();
-				} catch (SQLException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-			}
-			if (rs != null) {
-				try {
-					rs.close();
-				} catch (SQLException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-			}
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return user;
 	}
 
-	public List<Tag> getAllUserSpecialtiesFromDb(long userId) {
+	public List<Tag> getAllUserSpecialtiesFromDb(long userId) throws TagException {
 		List<Tag> specialties = new ArrayList<Tag>();
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
 		String selectSql = "Select specialty_id, name from leaps.specialties WHERE user_id = ?";
-		
 		try {
 			dbConnection = DBManager.getInstance().getConnection();
 			preparedStatement = dbConnection.prepareStatement(selectSql);
 			preparedStatement.setLong(1, userId);
 			
-			ResultSet rs = preparedStatement.executeQuery();
-
-			if (Configuration.debugMode) {
-				logger.info("SQL Statement: " + preparedStatement.toString());
-			}
-			
+			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
 				specialties.add(EventDao.getInstance().createNewTag(rs.getInt("specialty_id"),rs.getString("name"), userId));
 			}
-
-
-			if (Configuration.debugMode) {
-				LeapsUtils.logRetrievedTagsFromTheDB(specialties);
-			}
+		    
+			return specialties;
 	    } catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			
+			throw new TagException(Configuration.CANNOT_RETRIEVE_USER_SPECIALTIES);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-	    
-		return specialties;
 	}
 
 	public Event getEventById(long eventId) throws EventException {
 		Event event = null;
 		Connection dbConnection = null;
+		ResultSet rs = null;
 		PreparedStatement preparedStatement = null;
 		
 		String selectSQL = "SELECT title, description, date, time_from, time_to, owner_id, coord_lat, coord_lnt, "
@@ -594,19 +588,11 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement = dbConnection.prepareStatement(selectSQL);
 			preparedStatement.setLong(1, eventId);
 			
-			ResultSet rs = preparedStatement.executeQuery();
-
-			if (Configuration.debugMode) {
-				logger.info("SQL Statement: " + preparedStatement.toString());
-			}
-			
+			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
 				event = EventDao.getInstance().generateNewEvent(eventId, rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), rs.getLong("time_to"), rs.getLong("owner_id"), rs.getString("event_image_url"),
 								 rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"),rs.getInt("price_from"), rs.getString("address"),
-						 rs.getInt("free_slots"), rs.getLong("date"));
-				if (Configuration.debugMode) {
-					LeapsUtils.logRetrievedEventsFromTheDB(event);
-				}
+								 rs.getInt("free_slots"), rs.getLong("date"));
 			}
 			
 			return event;
@@ -614,30 +600,27 @@ public class DBUserDao implements IDBUserDao {
 	    	if (Configuration.debugMode) {
 				logger.error(e.getMessage());
 			}
+	    	
 			throw new EventException(Configuration.EVENT_DOES_NOT_EXIST);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
 	}
 
-	public List<User> getAllAttendingUsersForEvent(long eventId) {
+	public List<User> getAllAttendingUsersForEvent(long eventId) throws UserException {
 		List<User> users = new ArrayList<User>();
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
-		String selectSQL = "select u.user_id, u.username, u.email_address, u.password, u.age, u.gender, u.location, u.max_distance_setting, u.first_name, u.last_name, u.birthday, u.description,"
-						 + " u.profile_image_url, u.is_trainer, u.facebook_id, u.google_id, u.phone_number, u.years_of_training, u.session_price, u.long_description"
-						 + " from leaps.users u WHERE u.user_id IN (SELECT uae.user_id FROM leaps.users_attend_events uae WHERE uae.event_id = ?)";
+		String selectSQL = "select * from leaps.users u WHERE u.user_id IN (SELECT uae.user_id FROM leaps.users_attend_events uae WHERE uae.event_id = ?)";
 		
 		try {
 			dbConnection = DBManager.getInstance().getConnection();
 			preparedStatement = dbConnection.prepareStatement(selectSQL);
 			preparedStatement.setLong(1, eventId);
 			
-			ResultSet rs = preparedStatement.executeQuery();
-
-			if (Configuration.debugMode) {
-				logger.info("SQL Statement: " + preparedStatement.toString());
-			}
-			
+			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
 				users.add(UserDao.getInstance().createNewUser(rs.getInt("user_id"), rs.getString("username"), rs.getString("email_address"), rs.getInt("age"), rs.getString("gender"),
 						   rs.getString("location"), rs.getInt("max_distance_setting"), rs.getString("first_name"), rs.getString("last_name"), 
@@ -645,18 +628,24 @@ public class DBUserDao implements IDBUserDao {
 						   rs.getString("facebook_id"), rs.getString("google_id"), rs.getString("phone_number"),
 						   rs.getInt("session_price"), rs.getString("long_description"), rs.getInt("years_of_training")));
 			}
+			
+			return users;
 	    } catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new UserException(Configuration.CANNOT_RETRIEVE_ATTENDING_EVENT_USERS);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return users;
 	}
 
-	public Map<String, String> getAllEventImages(long eventId) {
+	public Map<String, String> getAllEventImages(long eventId) throws ImageException {
 		Map<String, String> images = new HashMap<String, String>();
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
 		String selectSQL = "SELECT image_id, file_name FROM leaps.event_images WHERE event_id = ?";
 		
@@ -665,34 +654,29 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement = dbConnection.prepareStatement(selectSQL);
 			preparedStatement.setLong(1, eventId);
 			
-			ResultSet rs = preparedStatement.executeQuery();
-
-			if (Configuration.debugMode) {
-				logger.info("SQL Statement: " + preparedStatement.toString());
-			}
-			
+			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
 				images.put(rs.getString("image_id"), rs.getString("file_name"));
 			}
-
-			if (Configuration.debugMode) {
-				for (Map.Entry<String, String> map : images.entrySet()) {
-					LeapsUtils.logRetrievedImageFromTheDB(map.getKey(), map.getValue());
-				}
-			}
+			
+			return images;
 	    } catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new ImageException(Configuration.CANNOT_RETRIEVE_IMAGE_FROM_DB);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return images;
 	}
 
-	public List<Tag> getAllEventTagsFromDb(long eventId) {
+	public List<Tag> getAllEventTagsFromDb(long eventId) throws TagException {
 		List<Tag> tags = new ArrayList<Tag>();
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
 		String selectSQL = "SELECT t.name, t.tag_id FROM leaps.tags t WHERE t.tag_id IN (SELECT eht.tag_id FROM leaps.event_has_tags eht WHERE eht.event_id = ?)";
 		
@@ -701,29 +685,21 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement = dbConnection.prepareStatement(selectSQL);
 			preparedStatement.setInt(1, (int)eventId);
 						
-			ResultSet rs = preparedStatement.executeQuery();
-
-			if (Configuration.debugMode) {
-				logger.info("SQL Statement: " + preparedStatement.toString());
-			}
-			
+			rs = preparedStatement.executeQuery();			
 			while (rs.next()) {
 				tags.add(EventDao.getInstance().createNewTag(rs.getInt("tag_id"), rs.getString("name")));
 			}
 			
-			if (Configuration.debugMode) {
-				List<String> tagNames = new ArrayList<String>();
-				for (int i = 0; i < tags.size(); i++) {
-					tagNames.add(tags.get(i).getName());
-				}
-				LeapsUtils.logRetrievedTagsFromTheDBAsString(tagNames);
-			}
+			return tags;
 	    } catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new TagException(Configuration.CANNOT_RETRIEVE_TAGS_FROM_SERVER);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return tags;
 	}
 
 	public boolean updateUser(Map<String, Map<String, Object>> params, long userId) throws UserException {
@@ -766,27 +742,29 @@ public class DBUserDao implements IDBUserDao {
 					}
 				}
 				preparedStatement.setLong(statementCounter, userId);
-
-				if (Configuration.debugMode) {
-					logger.info("SQL Statement: " + preparedStatement.toString());
-				}
-				
 				preparedStatement.executeUpdate();
+				
+				return success;
 		    } catch (Exception e) {
-				// TODO: proper exception
-		    	success = false;
-				throw new UserException(e.getMessage());
+		    	if (Configuration.debugMode) {
+					logger.error(e.getMessage());
+				}
+		    	
+				throw new UserException(Configuration.CANNOT_UPDATE_USER);
+			} finally {
+				closeResources(preparedStatement, null, dbConnection);
 			}
+		} else {
+			return success;
 		}
-		
-		return success;
 	}
 	
-	public List<Image> getAllUserImages(long userId) {
+	public List<Image> getAllUserImages(long userId) throws ImageException {
 		List<Image> images = new ArrayList<Image>();
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
 		String selectSQL = "SELECT image_id, file_name FROM leaps.user_images WHERE user_id = ?";
 		
@@ -795,25 +773,30 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement = dbConnection.prepareStatement(selectSQL);
 			preparedStatement.setLong(1, userId);
 						
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			
 			while (rs.next()) {
 				images.add(ImageDao.getInstance().createNewImage(rs.getLong("image_id"), userId, rs.getString("file_name")));
 			}			
-			
+
+			return images;
 	    } catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new ImageException(Configuration.CANNOT_RETRIEVE_IMAGE_FROM_DB);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return images;
 	}
 
-	public List<Event> getAllAttendingEventsForUser(long userId) {
+	public List<Event> getAllAttendingEventsForUser(long userId) throws EventException {
 		List<Event> events = new ArrayList<Event>();
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
 		String selectSQL = "SELECT e.event_id, e.title, e.description, e.date, e.time_from, e.time_to, e.owner_id, e.coord_lat, e.coord_lnt, e.price_from, e.address, e.free_slots, e.date_created, e.event_image_url"
 						+ "	FROM leaps.events e"
@@ -825,26 +808,31 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement = dbConnection.prepareStatement(selectSQL);
 			preparedStatement.setLong(1, userId);
 			
-			ResultSet rs = preparedStatement.executeQuery();
-			
+			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), rs.getLong("time_to"), 
 						userId, rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"), rs.getInt("price_from"), rs.getString("address"),
 						rs.getInt("free_slots"), rs.getLong("date")));
 			}
+			
+			return events;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new EventException(Configuration.CANNOT_RETRIEVE_ATTENDING_EVENTS_FOR_USER);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return events;
 	}
 
-	public List<Event> getAllHostingEventsForUser(long userId) {
+	public List<Event> getAllHostingEventsForUser(long userId) throws EventException {
 		List<Event> events = new ArrayList<Event>();
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
 		String selectSQL = "SELECT e.event_id, e.title, e.description, e.date, e.time_from, e.time_to, e.owner_id, e.coord_lat, e.coord_lnt, e.price_from, e.address, e.free_slots, e.date_created, e.event_image_url"
 						 + " FROM leaps.events e WHERE e.owner_id = ?";
@@ -854,26 +842,30 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement = dbConnection.prepareStatement(selectSQL);
 			preparedStatement.setLong(1, userId);
 			
-			ResultSet rs = preparedStatement.executeQuery();
-			
+			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), rs.getLong("time_to"), 
 						userId, rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"), rs.getInt("price_from"), rs.getString("address"),
 						rs.getInt("free_slots"), rs.getLong("date")));
 			}			
-			
+
+			return events;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new EventException(Configuration.CANNOT_RETRIEVE_HOSTING_EVENTS_FOR_USER);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return events;
 	}
 
-	public int getEventAttendeesNumber(long eventId) {
+	public int getEventAttendeesNumber(long eventId) throws UserException {
 		int attendees = -1;
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
 		String selectSQL = "select count(user_id) as 'attendees' from leaps.users_attend_events where event_id = ?";
 		
@@ -882,21 +874,24 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement = dbConnection.prepareStatement(selectSQL);
 			preparedStatement.setLong(1, eventId);
 			
-			ResultSet rs = preparedStatement.executeQuery();
-			
+			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
 				attendees = rs.getInt("attendees");
-			}			
+			}
 			
+			return attendees;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new UserException(Configuration.CANNOT_RETRIEVE_EVENT_ATTENDEES);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return attendees;
 	}
 
-	public void addAttendeeForEvent(long userId, long eventId) {
+	public void addAttendeeForEvent(long userId, long eventId) throws UserException {
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
 		
@@ -910,13 +905,17 @@ public class DBUserDao implements IDBUserDao {
 			
 			preparedStatement.executeUpdate();
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new UserException(Configuration.CANNOT_INSERT_USER_INTO_DB);
+		} finally {
+			closeResources(preparedStatement, null, dbConnection);
 		}
 	}
 
-	public boolean unattendUserFromEvent(long userId, long eventId) {
-		boolean success = true;
+	public boolean unattendUserFromEvent(long userId, long eventId) throws UserException {
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
 		
@@ -929,23 +928,28 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement.setLong(2, eventId);
 			
 			preparedStatement.executeUpdate();
+			
+			return true;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
-			success = false;
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new UserException(Configuration.CANNOT_UNNATEND_FROM_EVENT);
+		} finally {
+			closeResources(preparedStatement, null, dbConnection);
 		}
-		
-		return success;
 	}
 
-	public List<Event> getAllPastHostingEventsForUser(int userId, int limit, int page) {
+	public List<Event> getAllPastHostingEventsForUser(int userId, int limit, int page) throws EventException {
 		List<Event> events = new ArrayList<Event>();
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
 		String selectSQL = "SELECT e.event_id, e.title, e.description, e.date, e.time_from, e.time_to, e.owner_id, e.coord_lat, e.coord_lnt, e.price_from, e.address, e.free_slots, e.date_created, e.event_image_url"
-						 + " FROM leaps.events e WHERE e.owner_id = ? AND e.date < ? LIMIT ?, ?";
+						 + " FROM leaps.events e WHERE e.owner_id = ? AND e.fime_from < ? LIMIT ?, ?";
 		
 		try {
 			dbConnection = DBManager.getInstance().getConnection();
@@ -955,30 +959,35 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement.setInt(3, (page - 1) * limit);
 			preparedStatement.setInt(4, limit);
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), rs.getLong("time_to"), 
 						userId, rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"), rs.getInt("price_from"), rs.getString("address"),
 						rs.getInt("free_slots"), rs.getLong("date")));
 			}			
-			
+
+			return events;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new EventException(Configuration.CANNOT_RETRIEVE_HOSTING_EVENTS_FOR_USER);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return events;
 	}
 
-	public List<Event> getAllFutureHostingEventsForUser(int userId, int limit, int page) {
+	public List<Event> getAllFutureHostingEventsForUser(int userId, int limit, int page) throws EventException {
 		List<Event> events = new ArrayList<Event>();
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
 		String selectSQL = "SELECT e.event_id, e.title, e.description, e.date, e.time_from, e.time_to, e.owner_id, e.coord_lat, e.coord_lnt, e.price_from, e.address, e.free_slots, e.date_created, e.event_image_url"
-						 + " FROM leaps.events e WHERE e.owner_id = ? AND e.time_from > ? LIMIT ?, ?";
+						 + " FROM leaps.events e WHERE e.owner_id = ? AND e.time_from >= ? LIMIT ?, ?";
 		
 		try {
 			dbConnection = DBManager.getInstance().getConnection();
@@ -988,27 +997,32 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement.setInt(3, (page - 1) * limit);
 			preparedStatement.setInt(4, limit);
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), rs.getLong("time_to"), 
 						userId, rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"), rs.getInt("price_from"), rs.getString("address"),
 						rs.getInt("free_slots"), rs.getLong("date")));
-			}			
+			}
 			
+			return events;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new EventException(Configuration.CANNOT_RETRIEVE_HOSTING_EVENTS_FOR_USER);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return events;
 	}
 
-	public List<Event> getAllPastAttendingEventsForUser(int userId, int limit, int page) {
+	public List<Event> getAllPastAttendingEventsForUser(int userId, int limit, int page) throws EventException {
 		List<Event> events = new ArrayList<Event>();
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
 		String selectSQL = "SELECT e.event_id, e.title, e.description, e.date, e.time_from, e.time_to, e.owner_id, e.coord_lat, e.coord_lnt, e.price_from, e.address, e.free_slots, e.date_created, e.event_image_url"
 				+ "	FROM leaps.events e"
@@ -1024,33 +1038,38 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement.setInt(3, (page - 1) * limit);
 			preparedStatement.setInt(4, limit);
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), rs.getLong("time_to"), 
 						userId, rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"), rs.getInt("price_from"), rs.getString("address"),
 						rs.getInt("free_slots"), rs.getLong("date")));
-			}			
+			}
 			
+			return events;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new EventException(Configuration.CANNOT_RETRIEVE_ATTENDING_EVENTS_FOR_USER);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return events;
 	}
 
-	public List<Event> getAllFutureAttendingEventsForUser(int userId, int limit, int page) {
+	public List<Event> getAllFutureAttendingEventsForUser(int userId, int limit, int page) throws EventException {
 		List<Event> events = new ArrayList<Event>();
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
 		String selectSQL = "SELECT e.event_id, e.title, e.description, e.date, e.time_from, e.time_to, e.owner_id, e.coord_lat, e.coord_lnt, e.price_from, e.address, e.free_slots, e.date_created, e.event_image_url"
 				+ "	FROM leaps.events e"
 				+ "	WHERE e.event_id in"
 				+ " (SELECT uae.event_id FROM leaps.users_attend_events uae WHERE uae.user_id = ?)"
-				+ " AND e.time_from > ? LIMIT ?, ?";
+				+ " AND e.time_from >= ? LIMIT ?, ?";
 		
 		try {
 			dbConnection = DBManager.getInstance().getConnection();
@@ -1060,26 +1079,31 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement.setInt(3, (page - 1) * limit);
 			preparedStatement.setInt(4, limit);
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), rs.getLong("time_to"), 
 						rs.getLong("owner_id"), rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"), rs.getInt("price_from"), rs.getString("address"),
 						rs.getInt("free_slots"), rs.getLong("date")));
-			}			
+			}
 			
+			return events;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new EventException(Configuration.CANNOT_RETRIEVE_ATTENDING_EVENTS_FOR_USER);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return events;
 	}
 
-	public int getTheTotalNumberOfPastAttendingEvents(int userId) {
+	public int getTheTotalNumberOfPastAttendingEvents(int userId) throws EventException {
 		int counter = -1;
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
 		String selectSQL = "SELECT count(e.event_id) as 'total_number' FROM leaps.events e WHERE e.event_id IN (SELECT uae.event_id FROM leaps.users_attend_events uae WHERE uae.user_id = ?) AND e.time_from < ?";
 		
@@ -1088,24 +1112,29 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement = dbConnection.prepareStatement(selectSQL);
 			preparedStatement.setLong(1, userId);
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			
 			while (rs.next()) {
 				counter = rs.getInt("total_number");
 			}			
 			
+			return counter;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new EventException(Configuration.CANNOT_RETRIEVE_NUMBER_OF_PAST_ATTENDING_EVENTS);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return counter;
 	}
 
-	public int insertUserImageIntoDB(long userId, String fileName) {
+	public int insertUserImageIntoDB(long userId, String fileName) throws ImageException {
 		int imageId = -1;
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet generatedKeys = null;
 		
 		String selectSQL = "INSERT INTO leaps.user_images (user_id, file_name) VALUES ( ? , ? )";
 		
@@ -1117,21 +1146,24 @@ public class DBUserDao implements IDBUserDao {
 			
 			preparedStatement.execute();
 			
-			ResultSet generatedKeys = preparedStatement.getGeneratedKeys();
+			generatedKeys = preparedStatement.getGeneratedKeys();
             if (generatedKeys.next()) {
             	imageId = generatedKeys.getInt(1);
             }
+    		
+    		return imageId;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new ImageException(Configuration.CANNOT_INSERT_IMAGE_INTO_DATABASE);
+		} finally {
+			closeResources(preparedStatement, generatedKeys, dbConnection);
 		}
-		
-		return imageId;
 	}
 
-	public boolean removeUserImageFromDB(int imageId) {
-		boolean success = true;
-		
+	public boolean removeUserImageFromDB(int imageId) throws ImageException {
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
 		
@@ -1143,21 +1175,25 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement.setInt(1, imageId);
 			
 			preparedStatement.execute();
+			
+			return true;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
-			success = false;
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new ImageException(Configuration.CANNOT_REMOVE_IMAGE_FROM_DB);
+		} finally {
+			closeResources(preparedStatement, null, dbConnection);
 		}
-		
-		return success;
 	}
 
-	public String getUserImageNameById(int imageId) {
+	public String getUserImageNameById(int imageId) throws ImageException {
 		String imageName = null;
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
-		
+		ResultSet rs = null;
 		String selectSQL = "SELECT file_name FROM leaps.user_images WHERE image_id = ?";
 		
 		try {
@@ -1165,22 +1201,28 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement = dbConnection.prepareStatement(selectSQL);
 			preparedStatement.setInt(1, imageId);
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
 				imageName = rs.getString("file_name");
 			}
+			
+			return imageName;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new ImageException(Configuration.CANNOT_RETRIEVE_IMAGE_FROM_DB);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return imageName;
 	}
 	
-	public int insertEventImageIntoDB(long eventId, String fileName) {
+	public int insertEventImageIntoDB(long eventId, String fileName) throws ImageException {
 		int imageId = -1;
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet generatedKeys = null;
 		
 		String selectSQL = "INSERT INTO leaps.event_images (event_id, file_name) VALUES ( ? , ? )";
 		
@@ -1192,23 +1234,29 @@ public class DBUserDao implements IDBUserDao {
 			
 			preparedStatement.execute();
 			
-			ResultSet generatedKeys = preparedStatement.getGeneratedKeys();
+			generatedKeys = preparedStatement.getGeneratedKeys();
             if (generatedKeys.next()) {
             	imageId = generatedKeys.getInt(1);
             }
+    		
+    		return imageId;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new ImageException(Configuration.CANNOT_INSERT_IMAGE_INTO_DATABASE);
+		} finally {
+			closeResources(preparedStatement, generatedKeys, dbConnection);
 		}
-		
-		return imageId;
 	}
 
-	public String getEventImageNameById(int imageId) {
+	public String getEventImageNameById(int imageId) throws ImageException {
 		String imageName = null;
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
 		String selectSQL = "SELECT file_name FROM leaps.event_images WHERE image_id = ?";
 		
@@ -1217,21 +1265,24 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement = dbConnection.prepareStatement(selectSQL);
 			preparedStatement.setInt(1, imageId);
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
 				imageName = rs.getString("file_name");
 			}
+			
+			return imageName;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new ImageException(Configuration.CANNOT_RETRIEVE_IMAGE_FROM_DB);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return imageName;
 	}
 
-	public boolean removeEventImageFromDB(int imageId) {
-		boolean success = true;
-		
+	public boolean removeEventImageFromDB(int imageId) throws ImageException {
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
 		
@@ -1243,17 +1294,20 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement.setInt(1, imageId);
 			
 			preparedStatement.execute();
+			
+			return true;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
-			success = false;
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new ImageException(Configuration.CANNOT_REMOVE_IMAGE_FROM_DB);
+		} finally {
+			closeResources(preparedStatement, null, dbConnection);
 		}
-		
-		return success;
 	}
 
-	public boolean insertUserMainImageIntoDB(long userId, String fileName) {
-		boolean success = true;
+	public boolean insertUserMainImageIntoDB(long userId, String fileName) throws ImageException {
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
 		
@@ -1266,17 +1320,20 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement.setLong(2, userId);
 			
 			preparedStatement.executeUpdate();
+			
+			return true;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
-			success = false;
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new ImageException(Configuration.CANNOT_INSERT_IMAGE_INTO_DATABASE);
+		} finally {
+			closeResources(preparedStatement, null, dbConnection);
 		}
-		
-		return success;
 	}
 
-	public boolean insertEventMainImageIntoDB(long eventId, String fileName) {
-		boolean success = true;
+	public boolean insertEventMainImageIntoDB(long eventId, String fileName) throws ImageException {
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
 		
@@ -1289,19 +1346,24 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement.setLong(2, eventId);
 			
 			preparedStatement.executeUpdate();
+			
+			return true;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
-			success = false;
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new ImageException(Configuration.CANNOT_INSERT_IMAGE_INTO_DATABASE);
+		} finally {
+			closeResources(preparedStatement, null, dbConnection);
 		}
-		
-		return success;
 	}
 
-	public boolean checkIfUserAlreadyAttendsAnEvent(long userId, long eventId) {
+	public boolean checkIfUserAlreadyAttendsAnEvent(long userId, long eventId) throws UserException {
 		boolean success = false;
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
 		String selectSQL = "SELECT user_id FROM leaps.users_attend_events WHERE user_id = ? AND event_id = ?";
 		
@@ -1311,23 +1373,28 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement.setLong(1, userId);
 			preparedStatement.setLong(2, eventId);
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			if (rs.next()) {
 				success = true;
 			}
+
+			return success;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
-			success = true;
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new UserException(Configuration.CANNOT_CHECK_IF_USER_ATTENDS_EVENT);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return success;
 	}
 
-	public int getAllEventCountThatUserHasAttended(long userId) {
+	public int getAllEventCountThatUserHasAttended(long userId) throws EventException {
 		int counter = 0;
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
 		String selectSQL = "select count(event_id) as 'attends' FROM leaps.users_attend_events WHERE user_id = ?";
 		
@@ -1336,22 +1403,29 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement = dbConnection.prepareStatement(selectSQL);
 			preparedStatement.setLong(1, userId);
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			if (rs.next()) {
 				counter = rs.getInt("attends");
 			}
+
+			return counter;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new EventException(Configuration.CANNOT_RETRIEVE_EVENT_ATTENDEES);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		return counter;
 	}
 
-	public List<User> getAllTrainersWithMostEventsCreated() {
+	public List<User> getAllTrainersWithMostEventsCreated() throws UserException {
 		List<User> users = new ArrayList<User>();
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
 		String selectSQL = "SELECT u.user_id, u.username, u.email_address, u.password, u.age, u.gender, u.location, u.max_distance_setting, u.first_name, u.last_name, u.birthday,"
 				+ " u.description, u.profile_image_url, u.is_trainer, u.facebook_id, u.google_id, u.phone_number, u.years_of_training, u.session_price, u.long_description"
@@ -1368,34 +1442,40 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement = dbConnection.prepareStatement(selectSQL);
 			preparedStatement.setInt(1, Configuration.TRAINER_FEED_LIMIT_SIZE);
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
 				users.add(UserDao.getInstance().createNewUser(rs.getLong("user_id"), rs.getString("username"), rs.getString("email_address"), rs.getInt("age"), rs.getString("gender"), rs.getString("location"), 
 						rs.getInt("max_distance_setting"), rs.getString("first_name"), rs.getString("last_name"), rs.getLong("birthday"), rs.getString("description"), 
 						rs.getString("profile_image_url"), rs.getBoolean("is_trainer"), rs.getString("facebook_id"), rs.getString("google_id"), rs.getString("phone_number"), 
 						rs.getInt("session_price"), rs.getString("long_description"), rs.getInt("years_of_training")));
 			}
+			
+			return users;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new UserException(Configuration.CANNOT_RETRIEVE_USERS_FROM_DB);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return users;
 	}
 
-	public List<Event> getMostPopularEvents(int page, int limit) {
+	public List<Event> getMostPopularEvents(int page, int limit) throws EventException {
 		List<Event> events = new ArrayList<Event>();
 		
 		long currentTime = System.currentTimeMillis() + Configuration.THREE_HOURS_IN_MS;
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
 		String selectSQL = "SELECT e.event_id, e.title, e.description, e.date, e.time_from, e.time_to, e.owner_id, e.coord_lat, e.coord_lnt, e.price_from, e.address, e.free_slots, e.event_image_url"
 						 + " FROM leaps.events e"
 						 + " LEFT JOIN leaps.users_attend_events uae"
 						 + " ON uae.event_id = e.event_id"
-						 + " WHERE e.time_from > ?"
+						 + " WHERE e.time_from >= ?"
 						 + " GROUP BY uae.event_id"
 						 + " HAVING count(uae.user_id) > 0"
 						 + " ORDER BY count(uae.event_id)"
@@ -1408,27 +1488,33 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement.setInt(2, (page - 1) * limit);
 			preparedStatement.setInt(3, limit);
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), 
 						rs.getLong("time_to"), rs.getLong("owner_id"), rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"),rs.getInt("price_from"), 
 						rs.getString("address"), rs.getInt("free_slots"), rs.getLong("date")));
 			}
+			
+			return events;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new EventException(Configuration.CANNOT_RETRIEVE_MOST_POPULAR_EVENTS);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return events;
 	}
 
-	public List<Event> getAllEUpcommingEvents() {
+	public List<Event> getAllEUpcommingEvents() throws EventException {
 		List<Event> events = new ArrayList<Event>();
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
-		String selectSQL = "SELECT * FROM leaps.events WHERE time_from > ?";
+		String selectSQL = "SELECT * FROM leaps.events WHERE time_from >= ?";
 		
 		long currentTime = System.currentTimeMillis();
 		
@@ -1437,29 +1523,35 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement = dbConnection.prepareStatement(selectSQL);
 			preparedStatement.setLong(1, currentTime);
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), 
 						rs.getLong("time_to"), rs.getLong("owner_id"), rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"),rs.getInt("price_from"), 
 						rs.getString("address"), rs.getInt("free_slots"), rs.getLong("date")));
 			}
+			
+			return events;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new EventException(Configuration.CANNOT_RETRIEVE_UPCOMMING_EVENTS);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return events;
 	}
 
-	public List<Event> getNearbyUpcommingEvents(double latitude, double longitude,int page, int limit) {
+	public List<Event> getNearbyUpcommingEvents(double latitude, double longitude,int page, int limit) throws EventException {
 		List<Event> events = new ArrayList<Event>();
 		
 		long currentTime = System.currentTimeMillis() + Configuration.THREE_HOURS_IN_MS;
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
-		String selectSQL = "SELECT * FROM leaps.events WHERE time_from > ? ORDER BY ABS(ABS(coord_lat - ?) + ABS(coord_lnt - ?)) ASC LIMIT ?, ?";
+		String selectSQL = "SELECT * FROM leaps.events WHERE time_from >= ? ORDER BY ABS(ABS(coord_lat - ?) + ABS(coord_lnt - ?)) ASC LIMIT ?, ?";
 				
 		try {
 			dbConnection = DBManager.getInstance().getConnection();
@@ -1470,27 +1562,32 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement.setInt(4, (page - 1) * limit);
 			preparedStatement.setInt(5, limit);
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), 
 						rs.getLong("time_to"), rs.getLong("owner_id"), rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"),rs.getInt("price_from"), 
 						rs.getString("address"), rs.getInt("free_slots"), rs.getLong("date")));
 			}
+			
+			return events;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new EventException(Configuration.CANNOT_RETRIEVE_NEARBY_UPCOMMING_EVENTS);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return events;
 	}
 
 	public List<Event> getFilteredEventsWithCoordinates(String keyWord, double latitude, double longitude, int distance,
-			List<String> tags, long minStartingDate, long maxStartingDate, int page, int limit) throws EventException {
+		List<String> tags, long minStartingDate, long maxStartingDate, String maxStartingDateString, int page, int limit) throws EventException {
 		List<Event> events = new ArrayList<Event>();
 		List<Object> params = new ArrayList<Object>();
 		List<String> types = new ArrayList<String>();		
 		
-		StringBuilder selectStatement = new StringBuilder("SELECT e.*, (ABS(ABS(e.coord_lat - ?) + ABS(e.coord_lnt - ?))) as 'distance' FROM leaps.events e WHERE e.time_from > ? AND e.time_to < ?");
+		StringBuilder selectStatement = new StringBuilder("SELECT e.*, (ABS(ABS(e.coord_lat - ?) + ABS(e.coord_lnt - ?))) as 'distance' FROM leaps.events e WHERE e.time_from >= ? AND e.time_from <= ?");
 		params.add(latitude);
 		types.add("double");
 		params.add(longitude);
@@ -1534,7 +1631,8 @@ public class DBUserDao implements IDBUserDao {
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
-				
+		ResultSet rs = null;
+		
 		try {
 			dbConnection = DBManager.getInstance().getConnection();
 			preparedStatement = dbConnection.prepareStatement(selectStatement.toString());
@@ -1550,17 +1648,23 @@ public class DBUserDao implements IDBUserDao {
 				}
 			}
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), 
 						rs.getLong("time_to"), rs.getLong("owner_id"), rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"),rs.getInt("price_from"), 
 						rs.getString("address"), rs.getInt("free_slots"), rs.getLong("date")));
 			}
+			
+			return events;
 		} catch (Exception e) {
-			throw new EventException(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new EventException(Configuration.CANNOT_RETRIEVE_FILTERED_EVENTS);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return events;
 	}
 
 	public List<Event> getFilteredEvents(String keyWord, int distance, List<String> tags, long minStartingDate, long maxStartingDate, int page, int limit) throws EventException {
@@ -1570,8 +1674,9 @@ public class DBUserDao implements IDBUserDao {
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
-		
-		StringBuilder selectStatement = new StringBuilder("SELECT e.* FROM leaps.events e WHERE e.time_from > ? AND e.time_to < ?");
+		ResultSet rs = null;
+				
+		StringBuilder selectStatement = new StringBuilder("SELECT e.* FROM leaps.events e WHERE e.time_from >= ? AND e.time_from <= ?");
 		params.add(minStartingDate);
 		types.add("long");
 		params.add(maxStartingDate);
@@ -1620,19 +1725,24 @@ public class DBUserDao implements IDBUserDao {
 				}
 			}
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), 
 						rs.getLong("time_to"), rs.getLong("owner_id"), rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"),rs.getInt("price_from"), 
 						rs.getString("address"), rs.getInt("free_slots"), rs.getLong("date")));
 			}			
-			
+
+			return events;
 		} catch (Exception e) {
-			throw new EventException(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new EventException(Configuration.CANNOT_RETRIEVE_FILTERED_EVENTS);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return events;
 	}
 
 	public List<User> getFilteredTrainersByMostEventsWithCoordinates(String keyWord, double latitude, double longitude,
@@ -1640,9 +1750,10 @@ public class DBUserDao implements IDBUserDao {
 		List<User> trainers = new ArrayList<User>();
 		List<Object> params = new ArrayList<Object>();
 		List<String> types = new ArrayList<String>();	
+		ResultSet rs = null;
 		
 		StringBuilder selectStatement = new StringBuilder("SELECT u.*, (ABS(ABS(e.coord_lat - ?) + ABS(e.coord_lnt - ?))) as 'distance' FROM leaps.users u"
-				+ " LEFT JOIN leaps.events e ON u.user_id = e.owner_id WHERE e.time_from > ? AND e.time_to < ?");
+				+ " LEFT JOIN leaps.events e ON u.user_id = e.owner_id WHERE e.time_from >= ? AND e.time_from <= ?");
 		params.add(latitude);
 		types.add("double");
 		params.add(longitude);
@@ -1704,18 +1815,31 @@ public class DBUserDao implements IDBUserDao {
 				}
 			}
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			if (Configuration.debugMode) {
+				logger.info("------------------------------------");
+				logger.info("DB statement:");
+				logger.info(preparedStatement.toString());
+				logger.info("------------------------------------");
+			}
+			
+			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
 				trainers.add(UserDao.getInstance().createNewUser(rs.getLong("user_id"), rs.getString("username"), rs.getString("email_address"), rs.getInt("age"), rs.getString("gender"), rs.getString("location"), 
 						rs.getInt("max_distance_setting"), rs.getString("first_name"), rs.getString("last_name"), rs.getLong("birthday"), rs.getString("description"), 
 						rs.getString("profile_image_url"), rs.getBoolean("is_trainer"), rs.getString("facebook_id"), rs.getString("google_id"), rs.getString("phone_number"), 
 						rs.getInt("session_price"), rs.getString("long_description"), rs.getInt("years_of_training")));
 			}
+			
+			return trainers;
 		} catch (Exception e) {
-			throw new UserException(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new UserException(Configuration.CANNOT_RETRIEVE_FILTERED_TRAINERS);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return trainers;
 	}
 
 	public List<User> getFilteredTrainersByMostEvents(String keyWord, int distance, List<String> tags,
@@ -1726,22 +1850,9 @@ public class DBUserDao implements IDBUserDao {
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
-//		SELECT u.*
-//		FROM leaps.users u
-//		LEFT JOIN leaps.events e
-//		ON u.user_id = e.owner_id 
-//		WHERE e.time_from > 101978506756
-//		AND e.time_to < 9226623422532
-//		AND (u.first_name LIKE '%test%' OR u.last_name LIKE '%test%' OR u.description LIKE '%test%' OR u.long_description LIKE '%test%')
-//		AND e.event_id IN (SELECT eht.event_id FROM leaps.event_has_tags eht WHERE eht.tag_id IN 
-//		(SELECT t.tag_id FROM leaps.tags t WHERE t.name = 'yoga' OR t.name = 'fafla'))
-		
-//		GROUP BY u.user_id
-//		ORDER BY count(e.owner_id)
-//		DESC LIMIT 0, 20;
-		
-		StringBuilder selectStatement = new StringBuilder("SELECT u.* FROM leaps.users u LEFT JOIN leaps.events e ON u.user_id = e.owner_id WHERE e.time_from > ? AND e.time_to < ?");
+		StringBuilder selectStatement = new StringBuilder("SELECT u.* FROM leaps.users u LEFT JOIN leaps.events e ON u.user_id = e.owner_id WHERE e.time_from >= ? AND e.time_from <= ?");
 		params.add(minStartingDate);
 		types.add("long");
 		params.add(maxStartingDate);
@@ -1792,20 +1903,25 @@ public class DBUserDao implements IDBUserDao {
 				}
 			}
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			
 			while (rs.next()) {
 				trainers.add(UserDao.getInstance().createNewUser(rs.getLong("user_id"), rs.getString("username"), rs.getString("email_address"), rs.getInt("age"), rs.getString("gender"), rs.getString("location"), 
 						rs.getInt("max_distance_setting"), rs.getString("first_name"), rs.getString("last_name"), rs.getLong("birthday"), rs.getString("description"), 
 						rs.getString("profile_image_url"), rs.getBoolean("is_trainer"), rs.getString("facebook_id"), rs.getString("google_id"), rs.getString("phone_number"), 
 						rs.getInt("session_price"), rs.getString("long_description"), rs.getInt("years_of_training")));
-			}			
+			}
 			
+			return trainers;
 		} catch (Exception e) {
-			throw new UserException(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new UserException(Configuration.CANNOT_RETRIEVE_FILTERED_TRAINERS);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return trainers;
 	}
 
 	public int countFilteredTrainersByMostEventsWithCoordinates(String keyWord, double latitude, double longitude,
@@ -1813,9 +1929,10 @@ public class DBUserDao implements IDBUserDao {
 		int count = 0;
 		List<Object> params = new ArrayList<Object>();
 		List<String> types = new ArrayList<String>();	
+		ResultSet rs = null;
 		
 		StringBuilder selectStatement = new StringBuilder("SELECT COUNT(*) FROM (SELECT u.*, (ABS(ABS(e.coord_lat - ?) + ABS(e.coord_lnt - ?))) as 'distance' FROM leaps.users u"
-				+ " LEFT JOIN leaps.events e ON u.user_id = e.owner_id WHERE e.time_from > ? AND e.time_to < ?");
+				+ " LEFT JOIN leaps.events e ON u.user_id = e.owner_id WHERE e.time_from >= ? AND e.time_from <= ?");
 		params.add(latitude);
 		types.add("double");
 		params.add(longitude);
@@ -1877,15 +1994,21 @@ public class DBUserDao implements IDBUserDao {
 				}
 			}
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			if (rs.next()) {
 				count = rs.getInt(1);
 			}
+			
+			return count;
 		} catch (Exception e) {
-			throw new UserException(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new UserException(Configuration.CANNOT_RETRIEVE_FILTERED_TRAINERS);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return count;
 	}
 
 	public int countFilteredTrainersByTheirEvents(String keyWord, int distance, List<String> tags,
@@ -1896,8 +2019,9 @@ public class DBUserDao implements IDBUserDao {
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
-		StringBuilder selectStatement = new StringBuilder("SELECT COUNT(*) FROM (SELECT u.* FROM leaps.users u LEFT JOIN leaps.events e ON u.user_id = e.owner_id WHERE e.time_from > ? AND e.time_to < ?");
+		StringBuilder selectStatement = new StringBuilder("SELECT COUNT(*) FROM (SELECT u.* FROM leaps.users u LEFT JOIN leaps.events e ON u.user_id = e.owner_id WHERE e.time_from >= ? AND e.time_from <= ?");
 		params.add(minStartingDate);
 		types.add("long");
 		params.add(maxStartingDate);
@@ -1948,17 +2072,22 @@ public class DBUserDao implements IDBUserDao {
 				}
 			}
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			
 			if (rs.next()) {
 				count = rs.getInt(1);
-			}			
+			}
 			
+			return count;
 		} catch (Exception e) {
-			throw new UserException(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new UserException(Configuration.CANNOT_RETRIEVE_FILTERED_TRAINERS);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return count;
 	}
 
 	public int getFilteredEventsCountWithCoordinates(String keyWord, double latitude, double longitude, int distance,
@@ -1966,8 +2095,9 @@ public class DBUserDao implements IDBUserDao {
 		int count = 0;
 		List<Object> params = new ArrayList<Object>();
 		List<String> types = new ArrayList<String>();		
+		ResultSet rs = null;
 		
-		StringBuilder selectStatement = new StringBuilder("SELECT COUNT(*) FROM (SELECT e.*, (ABS(ABS(e.coord_lat - ?) + ABS(e.coord_lnt - ?))) as 'distance' FROM leaps.events e WHERE e.time_from > ? AND e.time_to < ?");
+		StringBuilder selectStatement = new StringBuilder("SELECT COUNT(*) FROM (SELECT e.*, (ABS(ABS(e.coord_lat - ?) + ABS(e.coord_lnt - ?))) as 'distance' FROM leaps.events e WHERE e.time_from >= ? AND e.time_from <= ?");
 		params.add(latitude);
 		types.add("double");
 		params.add(longitude);
@@ -2027,15 +2157,21 @@ public class DBUserDao implements IDBUserDao {
 				}
 			}
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			if (rs.next()) {
 				count = rs.getInt(1);
 			}
+			
+			return count;
 		} catch (Exception e) {
-			throw new EventException(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new EventException(Configuration.CANNOT_RETRIEVE_FILTERED_EVENTS);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return count;
 	}
 
 	public int getFilteredEventsCount(String keyWord, int distance, List<String> tags, long minStartingDate, long maxStartingDate, int page, int limit) throws EventException {
@@ -2045,8 +2181,9 @@ public class DBUserDao implements IDBUserDao {
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
-		StringBuilder selectStatement = new StringBuilder("SELECT COUNT(*) FROM (SELECT e.* FROM leaps.events e WHERE e.time_from > ? AND e.time_to < ?");
+		StringBuilder selectStatement = new StringBuilder("SELECT COUNT(*) FROM (SELECT e.* FROM leaps.events e WHERE e.time_from >= ? AND e.time_from <= ?");
 		params.add(minStartingDate);
 		types.add("long");
 		params.add(maxStartingDate);
@@ -2095,42 +2232,52 @@ public class DBUserDao implements IDBUserDao {
 				}
 			}
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			
 			if (rs.next()) {
 				count = rs.getInt(1);
-			}			
+			}
 			
+			return count;
 		} catch (Exception e) {
-			throw new EventException(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new EventException(Configuration.CANNOT_RETRIEVE_FILTERED_EVENTS);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return count;
 	}
 
-	public List<String> getTagsFromTheDB() {
+	public List<String> getTagsFromTheDB() throws TagException {
 		List<String> tags = null;
 				
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
 		String selectSQL = "SELECT name FROM leaps.tags";
 		try {
 			dbConnection = DBManager.getInstance().getConnection();
 			preparedStatement = dbConnection.prepareStatement(selectSQL);
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			tags = new ArrayList<String>();
             while (rs.next()) {
             	tags.add(rs.getString("name"));
             }
-            
+    		
+    		return tags;
 		} catch (Exception e) {
-			// TODO: proper exception
-			System.out.println(e.getMessage());
+	    	if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+	    	
+			throw new TagException(Configuration.CANNOT_RETRIEVE_TAGS_FROM_DB);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return tags;
 	}
 	
 	public void followUser(long follower, int followed) throws EventException {
@@ -2150,6 +2297,8 @@ public class DBUserDao implements IDBUserDao {
 				logger.error(e.getMessage());
 			}
 			throw new EventException(Configuration.USER_IS_ALREADY_FOLLOWED);
+		} finally {
+			closeResources(preparedStatement, null, dbConnection);
 		}
 	}
 
@@ -2171,6 +2320,8 @@ public class DBUserDao implements IDBUserDao {
 				logger.error(e.getMessage());
 			}
 			throw new EventException(Configuration.USER_DOES_NOT_EXIST);
+		} finally {
+			closeResources(preparedStatement, null, dbConnection);
 		}
 	}
 
@@ -2181,6 +2332,7 @@ public class DBUserDao implements IDBUserDao {
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
 		
 		String selectSQL = "SELECT * FROM leaps.user_followers WHERE followed = ? OR follower = ?";
 		
@@ -2190,25 +2342,27 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement.setLong(1, userId);
 			preparedStatement.setLong(2, userId);
 			
-			ResultSet rs = preparedStatement.executeQuery();
+			rs = preparedStatement.executeQuery();
 			
 			while (rs.next()) {
 				if (rs.getLong("follower") == userId && rs.getLong("followed") == userId) {
 					continue;
 				} else if (rs.getLong("follower") == userId) {
-					tempUsers.get("follower").add(rs.getLong("followed"));
+					tempUsers.get("followed").add(rs.getLong("followed"));
 				} else if (rs.getLong("followed") == userId) {
-					tempUsers.get("followed").add(rs.getLong("follower"));
+					tempUsers.get("follower").add(rs.getLong("follower"));
 				}
 			}
+			
+			return tempUsers;
 		} catch (SQLException e) {
 			if (Configuration.debugMode) {
 				logger.error(e.getMessage());
 			}
 			throw new EventException(Configuration.ERROR_RETREIVING_THE_USERS);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
-		
-		return tempUsers;
 	}
 
 	public void followEvent(Long userId, int eventId) throws EventException {
@@ -2229,6 +2383,8 @@ public class DBUserDao implements IDBUserDao {
 				logger.error(e.getMessage());
 			}
 			throw new EventException(Configuration.EVENT_IS_ALREADY_FOLLOWED);
+		} finally {
+			closeResources(preparedStatement, null, dbConnection);
 		}
 	}
 
@@ -2250,30 +2406,530 @@ public class DBUserDao implements IDBUserDao {
 				logger.error(e.getMessage());
 			}
 			throw new EventException(Configuration.EVENT_DOES_NOT_EXIST);
+		} finally {
+			closeResources(preparedStatement, null, dbConnection);
 		}
 	}
 
-	public void rateEvent(Rate rate, long userId) throws EventException {
+	public long rateEvent(Rate rate) throws EventException {
+		long rateId = -1;
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
+		ResultSet generatedKeys = null;
 		
 		String selectSQL = "INSERT INTO leaps.event_rating (event_id, user_id, rating, comment, date_created) VALUES ( ? , ? , ? , ? , ? )";
 		
 		try {
 			dbConnection = DBManager.getInstance().getConnection();
-			preparedStatement = dbConnection.prepareStatement(selectSQL);
+			preparedStatement = dbConnection.prepareStatement(selectSQL, Statement.RETURN_GENERATED_KEYS);
 			preparedStatement.setLong(1, rate.getEventId());
-			preparedStatement.setLong(2, userId);
+			preparedStatement.setLong(2, rate.getUserId());
 			preparedStatement.setInt(3, rate.getRating());
 			preparedStatement.setString(4, rate.getComment());
 			preparedStatement.setLong(5, rate.getDateCreated());
 			preparedStatement.execute();
 			
+			generatedKeys = preparedStatement.getGeneratedKeys();
+            if (generatedKeys.next()) {
+            	rateId = generatedKeys.getLong(1);
+            } else {
+            	throw new EventException(Configuration.CANNOT_RATE_CURRENT_EVENT);
+            }
+			
+			return rateId;
 		} catch (SQLException e) {
 			if (Configuration.debugMode) {
 				logger.error(e.getMessage());
 			}
 			throw new EventException(Configuration.CANNOT_RATE_CURRENT_EVENT);
+		} finally {
+			closeResources(preparedStatement, generatedKeys, dbConnection);
+		}
+	}
+
+	public List<Rate> getRatesForEvent(long eventId) throws EventException {
+		List<Rate> rating = new ArrayList<Rate>();
+		
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
+		
+		String selectSQL = "SELECT * FROM leaps.event_rating WHERE event_id = ?";
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSQL);
+			preparedStatement.setLong(1, eventId);
+			
+			rs = preparedStatement.executeQuery();
+			
+			while (rs.next()) {
+				rating.add(RateDao.RateDaoEnum.INSTANCE.createRate(rs.getLong("id"), rs.getLong("event_id"), rs.getInt("rating"), rs.getLong("user_id"), rs.getString("comment"), 
+																   rs.getLong("date_created"), rs.getString("rating_image_url")));
+			}
+			
+			return rating;
+		} catch (SQLException e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			throw new EventException(Configuration.CANNOT_RETRIEVE_EVENT_RATINGS);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
+		}
+	}
+
+	public List<Rate> getRatesForEvent(long eventId, int page, int limit) throws EventException {
+		List<Rate> rating = new ArrayList<Rate>();
+		
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
+		
+		String selectSQL = "SELECT * FROM leaps.event_rating WHERE event_id = ? LIMIT ?, ?";
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSQL);
+			preparedStatement.setLong(1, eventId);
+			preparedStatement.setInt(2, (page - 1) * limit);
+			preparedStatement.setInt(3, limit);
+			
+			rs = preparedStatement.executeQuery();
+			
+			while (rs.next()) {
+				rating.add(RateDao.RateDaoEnum.INSTANCE.createRate(rs.getLong("id"), rs.getLong("event_id"), rs.getInt("rating"), rs.getLong("user_id"), rs.getString("comment"), 
+																   rs.getLong("date_created"), rs.getString("rating_image_url")));
+			}
+			
+			return rating;
+		} catch (SQLException e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			throw new EventException(Configuration.CANNOT_RETRIEVE_EVENT_RATINGS);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
+		}
+	}
+
+	public List<Long> getEventFollowingUsers(long follower, List<User> attending) throws EventException {
+		List<Long> followers = new ArrayList<Long>();
+		
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
+		
+		StringBuilder selectSQL = new StringBuilder("SELECT * FROM leaps.user_followers WHERE follower = ? AND followed IN (");
+		for (int i = 0; i < attending.size(); i++) {
+			if (i + 1 < attending.size()) {
+				selectSQL.append(" ? ,");
+			} else {
+				selectSQL.append(" ? )");
+			}
+		}
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSQL.toString());
+			preparedStatement.setLong(1, follower);
+			
+			for (int i = 0; i < attending.size(); i++) {
+				preparedStatement.setLong(i+2, attending.get(i).getUserId());
+			}
+			
+			rs = preparedStatement.executeQuery();
+			
+			while (rs.next()) {
+				if (rs.getLong("followed") == follower && rs.getLong("follower") == follower) {
+					continue;
+				}
+				followers.add(rs.getLong("followed"));
+			}
+			
+			return followers;
+		} catch (SQLException e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			throw new EventException(Configuration.CANNOT_RETRIEVE_EVENT_FOLLOWERS);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
+		}
+	}
+
+	public void insertRateImageIntoDB(long rateId, String fileName) throws EventException {
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		
+		String selectSQL = "update leaps.event_rating set rating_image_url = ? WHERE id = ?";
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSQL);
+			preparedStatement.setString(1, fileName);
+			preparedStatement.setLong(2, rateId);
+			preparedStatement.execute();
+		} catch (Exception e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			
+			throw new EventException(Configuration.CANNOT_INSERT_IMAGE_INTO_DATABASE);
+		} finally {
+			closeResources(preparedStatement, null, dbConnection);
+		}
+	}
+
+	public String getRateImageNameById(int id) throws EventException {
+		String imageName = null;
+		
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
+		
+		String selectSQL = "SELECT rating_image_url FROM leaps.event_rating WHERE id = ?";
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSQL);
+			preparedStatement.setInt(1, id);
+			
+			rs = preparedStatement.executeQuery();
+			while (rs.next()) {
+				imageName = rs.getString("rating_image_url");
+			}
+			
+			return imageName;
+		} catch (Exception e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			throw new EventException(Configuration.CANNOT_RETRIEVE_IMAGE_FROM_DB);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
+		}
+	}
+
+	public List<Event> getAllFollowedEvents(long userId, boolean isFuture) throws EventException {
+		List<Event> events = new ArrayList<Event>();
+		
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
+		
+		long time = System.currentTimeMillis();
+		
+		String selectSQL = " select e.* from leaps.events e where e.time_from " + (isFuture ? ">=" : "<=") + " ? and event_id in (select ef.event_id from leaps.event_followers ef where ef.user_id = ?)";
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSQL);
+			preparedStatement.setLong(1, time);
+			preparedStatement.setLong(2, userId);
+			
+			rs = preparedStatement.executeQuery();
+			while (rs.next()) {
+				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), 
+						rs.getLong("time_to"), rs.getLong("owner_id"), rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"),rs.getInt("price_from"), 
+						rs.getString("address"), rs.getInt("free_slots"), rs.getLong("date")));
+			}
+			
+			return events;
+		} catch (Exception e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			throw new EventException(Configuration.CANNOT_RETRIEVE_FOLLOWED_EVENTS);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
+		}
+	}
+	
+	
+	public void updateEvent(Map<String, Map<String, Object>> params, long eventId) throws EventException {		
+		if (!params.isEmpty()) {
+			Connection dbConnection = null;
+			PreparedStatement preparedStatement = null;
+			
+			StringBuilder selectSQL = new StringBuilder("update leaps.events set ");
+			int mapSize = params.size();
+			int counter = 0;
+			for (Map.Entry<String, Map<String, Object>> map : params.entrySet()) {
+				String key = map.getKey();
+				selectSQL.append(key + " = ?");
+				counter++;
+				if (counter < mapSize) {
+					selectSQL.append(", ");
+				} else {
+					selectSQL.append(" WHERE event_id = ?");
+				}
+			}
+			
+			try {
+				dbConnection = DBManager.getInstance().getConnection();
+				preparedStatement = dbConnection.prepareStatement(selectSQL.toString());
+				
+				int statementCounter = 1;
+				for (Map.Entry<String, Map<String, Object>> map : params.entrySet()) {
+					for (Map.Entry<String, Object> innerMap : map.getValue().entrySet()) {
+						if (innerMap.getKey().equals("string")) {
+							preparedStatement.setString(statementCounter++, String.valueOf(innerMap.getValue()));
+						} else if (innerMap.getKey().equals("int")) {
+							preparedStatement.setInt(statementCounter++, Integer.valueOf(String.valueOf(innerMap.getValue())));
+						} else if (innerMap.getKey().equals("long")) {
+							preparedStatement.setLong(statementCounter++, Long.valueOf(String.valueOf(innerMap.getValue())));
+						} else if (innerMap.getKey().equals("boolean")) {
+							preparedStatement.setBoolean(statementCounter++, Boolean.valueOf(String.valueOf(innerMap.getValue())));
+						}
+					}
+				}
+				
+				preparedStatement.setLong(statementCounter, eventId);				
+				preparedStatement.executeUpdate();
+		    } catch (Exception e) {
+				if (Configuration.debugMode) {
+					logger.info("SQL Statement: " + preparedStatement.toString());
+				}
+				throw new EventException(Configuration.CANNOT_UPDATE_EVENT);
+			} finally {
+				closeResources(preparedStatement, null, dbConnection);
+			}
+		}
+	}
+	
+	public void removeEventTagsFromDb(long eventId) throws EventException {
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		
+		String selectSQL = "DELETE FROM leaps.event_has_tags WHERE event_id = ?";
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSQL);
+			preparedStatement.setLong(1, eventId);
+			
+			preparedStatement.executeUpdate();
+		} catch (Exception e) {
+			if (Configuration.debugMode) {
+				logger.info("SQL Statement: " + preparedStatement.toString());
+			}
+			throw new EventException(Configuration.CANNOT_DELETE_TAGS_FOR_EVENT);
+		} finally {
+			closeResources(preparedStatement, null, dbConnection);
+		}
+	}
+
+	public void deleteEvent(long eventId) throws EventException {
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		
+		String selectSQL = "DELETE FROM leaps.events WHERE event_id = ?";
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSQL);
+			preparedStatement.setLong(1, eventId);
+			
+			preparedStatement.executeUpdate();
+		} catch (Exception e) {
+			if (Configuration.debugMode) {
+				logger.info("SQL Statement: " + preparedStatement.toString());
+			}
+			throw new EventException(Configuration.CANNOT_DELETE_EVENT);
+		} finally {
+			closeResources(preparedStatement, null, dbConnection);
+		}
+	}
+
+	public Rate getRate(long commentId) throws EventException {
+		Rate rate = null;
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
+		
+		String selectSQL = "SELECT * FROM leaps.event_rating WHERE id = ?";
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSQL);
+			preparedStatement.setLong(1, commentId);
+			
+			rs = preparedStatement.executeQuery();
+			
+			if (rs.next()) {
+				rate = RateDao.RateDaoEnum.INSTANCE.createRate(commentId, rs.getLong("event_id"), rs.getInt("rating"), rs.getLong("user_id"), 
+															   rs.getString("comment"), rs.getLong("date_created"), rs.getString("rating_image_url"));
+			}
+			
+			return rate;
+		} catch (Exception e) {
+			if (Configuration.debugMode) {
+				logger.info("SQL Statement: " + preparedStatement.toString());
+			}
+			throw new EventException(Configuration.CANNOT_RETRIEVE_RATE);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
+		}
+	}
+
+	public List<Long> getRatesForTrainer(long userId, int page, int limit) throws EventException {
+		List<Long> rating = new ArrayList<Long>();
+		
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		
+		String selectSQL = "SELECT id FROM leaps.event_rating WHERE user_id = ? LIMIT ?, ?";
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSQL);
+			preparedStatement.setLong(1, userId);
+			preparedStatement.setInt(2, (page - 1) * limit);
+			preparedStatement.setInt(3, limit);
+			
+			ResultSet rs = preparedStatement.executeQuery();
+			
+			while (rs.next()) {
+				rating.add(rs.getLong("id"));
+			}
+			
+			return rating;
+		} catch (SQLException e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			throw new EventException(Configuration.CANNOT_RETRIEVE_RATE);
+		} finally {
+			closeResources(preparedStatement, null, dbConnection);
+		}
+	}
+
+	public int getFollowingCount(Long userId) throws EventException {
+		int count = -1;
+		
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
+		String selectSQL = "SELECT COUNT(*) FROM leaps.user_followers WHERE follower = ? AND follower != followed";
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSQL);
+			preparedStatement.setLong(1, userId);
+			
+			rs = preparedStatement.executeQuery();
+			
+			if (rs.next()) {
+				count = rs.getInt(1);
+			}
+			
+			// default 0
+			return count >= 0 ? count : 0;
+		} catch (SQLException e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			throw new EventException(Configuration.CANNOT_RETRIEVE_FOLLOWING_COUNT);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
+		}
+	}
+
+	public int getFollowersCount(Long userId) throws EventException {
+		int count = -1;
+		
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
+		
+		String selectSQL = "SELECT COUNT(*) FROM leaps.user_followers WHERE followed = ? AND follower != followed";
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSQL);
+			preparedStatement.setLong(1, userId);
+			
+			rs = preparedStatement.executeQuery();
+			
+			if (rs.next()) {
+				count = rs.getInt(1);
+			}
+			
+			// default 0
+			return count >= 0 ? count : 0;
+		} catch (SQLException e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			throw new EventException(Configuration.CANNOT_RETRIEVE_FOLLOWERS_COUNT);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
+		}
+	}
+
+	public List<Integer> getAllUserRatings(Long userId) throws EventException {
+		List<Integer> rating = new ArrayList<Integer>();
+		
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
+		
+		String selectSQL = "SELECT rating FROM leaps.event_rating WHERE event_id IN (SELECT event_id FROM leaps.events WHERE owner_id = ?)";
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSQL);
+			preparedStatement.setLong(1, userId);
+			
+			rs = preparedStatement.executeQuery();
+			
+			while (rs.next()) {
+				rating.add(rs.getInt("rating"));
+			}
+			
+			return rating;
+		} catch (SQLException e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			throw new EventException(Configuration.CANNOT_RETRIEVE_EVENT_RATINGS);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
+		}
+	}
+
+	public boolean canRate(Long userId, long eventId) throws UserException {
+		boolean canRate = true;
+
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
+
+		String selectSql = "SELECT u.user_id FROM leaps.users u WHERE u.user_id IN (SELECT uae.user_id FROM leaps.users_attend_events uae WHERE uae.user_id = ? AND uae.event_id = ?) AND u.user_id IN (SELECT er.user_id FROM leaps.event_rating er WHERE er.user_id = ? AND er.event_id = ?)";
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSql);
+			preparedStatement.setLong(1, userId);
+			preparedStatement.setLong(2, eventId);
+			preparedStatement.setLong(3, userId);
+			preparedStatement.setLong(4, eventId);
+			
+			rs = preparedStatement.executeQuery();
+			
+			if (rs.next()) {
+				canRate = false;
+			}
+
+			return canRate;
+		} catch (SQLException e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			throw new UserException(Configuration.NO_USER_FOUND);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
 		}
 	}
 }
