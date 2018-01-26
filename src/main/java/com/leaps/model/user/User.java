@@ -25,6 +25,7 @@ public class User {
 	private int yearsOfTraining;
 	private int sessionPrice;
 	private String longDescription;
+	private String firebaseToken;
 	private List<Image> userImages;
 	
 	
@@ -47,7 +48,8 @@ public class User {
 	}
 	
 	User (Long userId, String username, String email, String pass, String firstName, String lastName, int age, String gender, String location,
-			int maxDistanceSetting, Long birthday, String description, String profileImageUrl, boolean isTrainer, String phoneNumber, int yearsOfTraining, int sessionPrice, String longDescription) {
+			int maxDistanceSetting, Long birthday, String description, String profileImageUrl, boolean isTrainer, String phoneNumber,
+			int yearsOfTraining, int sessionPrice, String longDescription) {
 		this.userId = userId;
 		this.username = username;
 		this.email = email;
@@ -70,29 +72,30 @@ public class User {
 	
 	User (Long userId, String username, String email, String firstName, String lastName, int age, String gender, String location,
 			int maxDistanceSetting, Long birthday, String description, String profileImageUrl, boolean isTrainer, String facebookId, 
-			String googleId, String phoneNumber, int yearsOfTraining, int sessionPrice, String longDescription) {
-	this.userId = userId;
-	this.username = username;
-	this.email = email;
-	this.firstName = firstName;
-	this.lastName = lastName;
-	this.age = age;
-	this.gender = gender;
-	this.location = location;
-	this.maxDistanceSetting = maxDistanceSetting;
-	this.birthday = birthday;
-	this.description = description;
-	this.profileImageUrl = profileImageUrl;
-	this.isTrainer = isTrainer;
-	this.facebookId = facebookId;
-	this.googleId = googleId;
-	this.phoneNumber = phoneNumber;
-	this.yearsOfTraining = yearsOfTraining;
-	this.sessionPrice = sessionPrice;
-	this.longDescription = longDescription;
-}
+			String googleId, String phoneNumber, int yearsOfTraining, int sessionPrice, String longDescription, String firebaseToken) {
+		this.userId = userId;
+		this.username = username;
+		this.email = email;
+		this.firstName = firstName;
+		this.lastName = lastName;
+		this.age = age;
+		this.gender = gender;
+		this.location = location;
+		this.maxDistanceSetting = maxDistanceSetting;
+		this.birthday = birthday;
+		this.description = description;
+		this.profileImageUrl = profileImageUrl;
+		this.isTrainer = isTrainer;
+		this.facebookId = facebookId;
+		this.googleId = googleId;
+		this.phoneNumber = phoneNumber;
+		this.yearsOfTraining = yearsOfTraining;
+		this.sessionPrice = sessionPrice;
+		this.longDescription = longDescription;
+		this.firebaseToken = firebaseToken;
+	}
 
-	User (Long userId, String username, String pass, String email, String firstName, String lastName, Long birthday, String facebookId, String googleId, int age) {
+	User (Long userId, String username, String pass, String email, String firstName, String lastName, Long birthday, String facebookId, String googleId, int age, String firebaseToken) {
 		this.userId = userId;
 		this.username = username;
 		this.pass = pass;
@@ -103,17 +106,7 @@ public class User {
 		this.facebookId = facebookId;
 		this.googleId = googleId;
 		this.age = age;
-	}
-
-
-	// DUMMY TEST USER: TO BE REMOVED
-	public static User getDummyUser(String username, String pass) {
-		return new User(1L, username, "krika_original@mail.bg", pass, "Mityo", "Krika", 40, "m", "Sofia", 4, System.currentTimeMillis(), "колко съм здрав - толкоз и тъп", "https://i.ytimg.com/vi/ZCiVuUczzgY/hqdefault.jpg", false);
-	}
-	
-	// DUMMY TEST TRAINER: TO BE REMOVED
-	public static User getDummyTrainer(String username, String pass) {
-		return new User(1L, username, "krika_original@mail.bg", pass, "Mityo", "Krika", 40, "m", "Sofia", 4, System.currentTimeMillis(), "колко съм здрав - толкоз и тъп", "https://www.novini.bg/uploads/news_pictures/2016-35/big/mitio-krika-spuka-10-dini-s-glavata-si-398375.png", true, "0888001122", 5, 10, "Tintiri Mintiri");
+		this.firebaseToken = firebaseToken;
 	}
 
 	// getters and setters
@@ -287,5 +280,13 @@ public class User {
 
 	public void setUserImages(List<Image> userImages) {
 		this.userImages = userImages;
+	}
+
+	public String getFirebaseToken() {
+		return firebaseToken;
+	}
+
+	public void setFirebaseToken(String firebaseToken) {
+		this.firebaseToken = firebaseToken;
 	}
 }

@@ -22,10 +22,9 @@ import com.leaps.model.utils.LeapsUtils;
 public class UtilsController {
 	
 	private CoordinatesEnum coordinateUtils = CoordinateUtils.CoordinatesEnum.INSTANCE;
+
 	/**
-	   {
-  		  "address" : "some address"
-       }
+	 * Get coordinates from given address
 	 */
 	@RequestMapping(method = RequestMethod.POST, value = "/coordinates")
 	public String getCoordinates(HttpServletRequest req, HttpServletResponse resp) {
@@ -57,14 +56,43 @@ public class UtilsController {
 	}
 	
 	/**
-	   {
-		  "address" : "some address"
-    }
+	 * Get address from given coordinates
 	 */
 	@RequestMapping(method = RequestMethod.POST, value = "/address")
 	public String getAddress(HttpServletRequest req, HttpServletResponse resp) {
 		try {
 			return coordinateUtils.getAddress(LeapsUtils.getRequestData(req)).toString();
+		} catch (IOException ioe) {
+			try {
+				resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, ioe.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (InvalidInputParamsException iipe) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, iipe.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (InvalidParametersException ipe) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ipe.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		}
+	}
+	
+	/**
+	 * Get address from given coordinates
+	 */
+	@RequestMapping(method = RequestMethod.POST, value = "/full_address")
+	public String getFullAddress(HttpServletRequest req, HttpServletResponse resp) {
+		try {
+			return coordinateUtils.getFullAddress(LeapsUtils.getRequestData(req)).toString();
 		} catch (IOException ioe) {
 			try {
 				resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, ioe.getMessage());

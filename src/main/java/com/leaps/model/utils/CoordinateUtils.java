@@ -84,6 +84,21 @@ public class CoordinateUtils {
             
     		return coords;
     	}
+
+		public JsonObject getAddress(JsonObject requestData) throws InvalidInputParamsException, InvalidParametersException {
+			JsonObject address = new JsonObject();			
+			JsonObject obj = getFullAddressFromCoordinates(requestData);
+			
+			JsonArray results = obj.get("results").getAsJsonArray();
+			String formattedAddress = results.get(0).getAsJsonObject().get("formatted_address").getAsString();
+			address.addProperty("address", formattedAddress);
+			
+			return address;
+		}
+
+		public JsonObject getFullAddress(JsonObject requestData) throws InvalidParametersException, InvalidInputParamsException {
+			return getFullAddressFromCoordinates(requestData);
+		}
     	
         private String getRequest(String url) throws Exception {
 
@@ -107,19 +122,16 @@ public class CoordinateUtils {
 
             return response.toString();
         }
-
-		public JsonObject getAddress(JsonObject requestData) throws InvalidInputParamsException, InvalidParametersException {
+		
+		private JsonObject getFullAddressFromCoordinates(JsonObject requestData) throws InvalidParametersException, InvalidInputParamsException {
 			if (requestData.get("coord_lat") == null || requestData.get("coord_lnt") == null) {
         		throw new InvalidInputParamsException(Configuration.INVALID_INPUT_PAREMETERS);
         	}
-			
-			
 			
 			double latitude = requestData.get("coord_lat").getAsDouble();
 			double longitude = requestData.get("coord_lnt").getAsDouble();
     		StringBuffer query = new StringBuffer();
             String queryResult = null;
-			JsonObject address = new JsonObject();
 			
             query.append("https://maps.googleapis.com/maps/api/geocode/json?latlng=" + latitude + "," + longitude + "&key=" + Configuration.LEAPS_GEOMAP_KEY);
 			
@@ -146,12 +158,8 @@ public class CoordinateUtils {
 			if (Configuration.debugMode) {
 				logger.debug("obj=" + obj);
 			}
-
-			JsonArray results = obj.get("results").getAsJsonArray();
-			String formattedAddress = results.get(0).getAsJsonObject().get("formatted_address").getAsString();
-			address.addProperty("address", formattedAddress);
 			
-			return address;
+			return obj;
 		}
     }
 }

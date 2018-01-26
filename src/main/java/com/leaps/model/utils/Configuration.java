@@ -2,6 +2,33 @@ package com.leaps.model.utils;
 
 public class Configuration {
 
+	public static final String FIREBASE_SERVER_KEY = "AAAAupXoEEc:APA91bE1CGVtuCT1kkgY3TByf9SQzWKgnJKXFOQMdJ3yb2D8fbgqRwEhv_koX2-LfiernysTwGkFUGfGLFOT73ECnavgH6MgJr5Gp_EYL5kVVitqPhrY8sgX0LNdI9iEO91r2nmC1iUc";
+	public static final String FIREBASE_API_URL = "https://fcm.googleapis.com/fcm/send";
+	
+	public enum RepeatOptions {
+		never, every_day, every_weekdays, every_weekends, every_week, every_two_weeks, every_month, custom;
+	}
+
+	public enum FrequencyOptions {
+		daily, weekly;
+	}
+	
+	public enum WeekDays {
+		monday, tuesday, wednesday, thursday, friday, saturday, sunday, everyday
+	}
+	
+	public static final int MAX_DAYS_OF_WEEK = 7;
+	
+	public static final String THIRTY_MINUTES = "1";
+	
+	public static final String MONDAY = "monday";
+	public static final String TUESDAY = "tuesday";
+	public static final String WEDNESDAY = "wednesday";
+	public static final String THURSDAY = "thursday";
+	public static final String FRIDAY = "friday";
+	public static final String SATURDAY = "saturday";
+	public static final String SUNDAY = "sunday";
+	
 	// Debug mode Configuration for logging
 	public static final boolean debugMode = true;
 	
@@ -18,7 +45,7 @@ public class Configuration {
 	
 	// Exception messages
 	public static final String WRONG_USERNAME_PASSWORD_MESSAGE = "Wrong username or password!";
-	public static final String NO_USER_FOUND = "No user was found with the presented token.";
+	public static final String NO_USER_FOUND = "No user was found";
 	public static final String INVALID_OR_EXPIRED_TOKEN = "Invalid or expired token";
 	public static final String INVALID_USER_ID = "Invalid user id";
 	public static final String INVALID_EVENT_ID = "Invalid event id";
@@ -166,4 +193,10 @@ public class Configuration {
 	public static final String CANNOT_RETRIEVE_FILTERED_TRAINERS = "Cannot retrieve filtered trainers";
 
 	public static final String CANNOT_RETRIEVE_TAGS_FROM_DB = "Cannot retrieve tags from db";
+
+	public static final String CANNOT_DELETE_SPECIALTIES_FOR_USER = "Cannot delete specialties for user";
+
+	public static final String CANNOT_INSERT_SPECIALTIES_IN_THE_DB = "Cannot insert specialties into the db";
+	public static final String ERROR_WHILE_SENDING_MESSAGE_TO_FIREBASE_TOPIC = "Error while sending message to firebase topic";
+	public static final String ERROR_UPDATING_FIREBASE_TOKEN = "Error while updating the user's firebase token";
 }

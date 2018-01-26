@@ -52,6 +52,7 @@ public class RegisterController {
 		Long birthday = null;
 		String facebookId = null;
 		String googleId = null;
+		String firebaseToken = null;
 		
 		try (Scanner sc = new Scanner(req.getInputStream())) {
 			StringBuilder sb = new StringBuilder();
@@ -66,6 +67,11 @@ public class RegisterController {
 			if (obj.get("email_address") == null || obj.get("first_name") == null ||
 				obj.get("last_name") == null || obj.get("birthday") == null || obj.get("password") == null) {
 				throw new InvalidParametersException(Configuration.INVALID_INPUT_PAREMETERS);
+			}
+			
+			// update the token only if it is available
+			if (obj.get("firebase_token") != null) {
+				firebaseToken = obj.get("firebase_token").getAsString();
 			}
 			
 			pass = obj.get("password").getAsString();
@@ -88,7 +94,8 @@ public class RegisterController {
 			
 			hashedPass = LeapsUtils.convertToMd5(pass);
 			
-			Map<Token, User> data = UserDao.getInstance().registerNewUser(hashedPass, email, firstName, lastName, birthday, facebookId, googleId);
+			Map<Token, User> data = UserDao.getInstance().registerNewUser(hashedPass, email, firstName, lastName, birthday, 
+																		  facebookId, googleId, firebaseToken);
 			
 			if (data.isEmpty()) {
 				throw new UserException(Configuration.ERROR_WHILE_CREATING_NEW_USER);

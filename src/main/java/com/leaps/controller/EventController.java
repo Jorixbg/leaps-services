@@ -81,7 +81,66 @@ public class EventController {
 			}
 		}
 	}
-	
+
+	/**
+	 * Create repeating event
+	 */
+	@RequestMapping(method = RequestMethod.PUT, value = "/create/repeat")
+	public String createRepeatingEvent(HttpServletRequest req, HttpServletResponse resp) {
+		try {
+			return EventDao.getInstance().createRepeatingEvent(LeapsUtils.checkToken(req.getHeader("Authorization")), LeapsUtils.getRequestData(req)).toString();
+		} catch (AuthorizationException ae) {
+			try {
+				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, ae.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (IOException e) {
+			try {
+				resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (InvalidParametersException ipe) {
+			try {
+				resp.sendError(HttpServletResponse.SC_BAD_REQUEST, ipe.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (EventException ee) {
+			try {
+				resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, ee.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		}  catch (UserException ue) {
+			try {
+				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, ue.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (ImageException ie) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ie.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		} catch (TagException te) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, te.getMessage());
+				return null;
+			} catch (IOException ioe) {
+				return null;
+			}
+		}
+	}
+
 	/**
 	 * Get all feed events
 	 */
@@ -137,7 +196,7 @@ public class EventController {
 			long token = UserDao.getInstance().checkIfTokenIsValid(req.getHeader("Authorization"));
 			
 			JsonArray response = new JsonArray();
-			response.add(LeapsUtils.generateJsonEvent(EventDao.getInstance().getEvent(eventId), token));
+			response.add(LeapsUtils.generateJsonEvent(EventDao.getInstance().getEvent(eventId), token, null, null));
 			
 			if (Configuration.debugMode) {
 				logger.info("Order: /{event_id}");
@@ -319,12 +378,14 @@ public class EventController {
 			
 			DBUserDao.getInstance().addAttendeeForEvent(userId, eventId);
 			
-			JsonObject response = LeapsUtils.generateJsonEvent(event, null);
+			JsonObject response = LeapsUtils.generateJsonEvent(event, null, null, null);
 			
 			if (Configuration.debugMode) {
 				logger.info("Order: event/attend");
 				logger.info(response.toString());
 			}
+			
+			LeapsUtils.attendEventInFirebase(user, event);
 			
 			return response.toString();
 		} catch (AuthorizationException ae) {
@@ -563,7 +624,7 @@ public class EventController {
 			}
 			
 			for (int i = 0; i < filteredEvents.size(); i++) {
-				filteredEventsJson.add(LeapsUtils.generateJsonEvent(filteredEvents.get(i), null));
+				filteredEventsJson.add(LeapsUtils.generateJsonEvent(filteredEvents.get(i), null, latitude, longitude));
 			}
 
 			response.add("events", filteredEventsJson);
@@ -644,7 +705,7 @@ public class EventController {
 			JsonArray response = new JsonArray();
 			
 			for (int i = 0; i < popularEvents.size(); i++) {
-				response.add(LeapsUtils.generateJsonEvent(popularEvents.get(i), null));
+				response.add(LeapsUtils.generateJsonEvent(popularEvents.get(i), null, null, null));
 			}
 
 			return response.toString();
@@ -756,7 +817,7 @@ public class EventController {
 			JsonArray response = new JsonArray();
 			
 			for (int i = 0; i < responseEvents.size(); i++) {
-				response.add(LeapsUtils.generateJsonEvent(responseEvents.get(i), null));
+				response.add(LeapsUtils.generateJsonEvent(responseEvents.get(i), null, latitude, longitude));
 			}
 			
 			return response.toString();
@@ -1025,6 +1086,13 @@ public class EventController {
 		} catch (EventException ee) {
 			try {
 				resp.sendError(HttpServletResponse.SC_CONFLICT, ee.getMessage());
+				return null;
+			} catch (IOException ioe2) {
+				return null;
+			}
+		} catch (UserException ue) {
+			try {
+				resp.sendError(HttpServletResponse.SC_CONFLICT, ue.getMessage());
 				return null;
 			} catch (IOException ioe2) {
 				return null;

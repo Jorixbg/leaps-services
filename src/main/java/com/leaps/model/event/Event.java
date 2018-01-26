@@ -42,11 +42,12 @@ public class Event {
 	private String address;
 	private int freeSlots;
 	private Long dateCreated;
+	private String firebaseTopic;
 	private List<Tag> tags;
 	private List<Image> images;
 	
 	Event(long eventId, String title, String description, Long date, Long timeFrom, Long timeTo, long ownerId, String eventImageUrl,
-			double coordLatitude, double coordLongitude, int priceFrom, String address, int freeSlots, Long dateCreated) {
+			double coordLatitude, double coordLongitude, int priceFrom, String address, int freeSlots, Long dateCreated, String firebaseTopic) {
 		this.eventId = eventId;
 		this.title = title;
 		this.description = description;
@@ -62,11 +63,6 @@ public class Event {
 		this.freeSlots = freeSlots;
 		this.dateCreated = dateCreated;
 		tags = new ArrayList<Tag>();
-	}
-	
-	// DUMMY TEST Event: TO BE REMOVED
-	public static Event createDummyEvent() {
-		return new Event(1, "тренировчица", "да свием корема", System.currentTimeMillis(), System.currentTimeMillis(), System.currentTimeMillis(), 1, "https://www.quizz.biz/uploads/quizz/1080849/5_9m2t6.jpg", 41.767205, 23.398868, 19, "gorno nadolnishte", 39, System.currentTimeMillis());
 	}
 
 	public long getEventId() {
@@ -195,5 +191,13 @@ public class Event {
 
 	public void setImages(List<Image> images) {
 		this.images = images;
+	}
+
+	public String getFirebaseTopic() {
+		return firebaseTopic;
+	}
+
+	public void setFirebaseTopic(String firebaseTopic) {
+		this.firebaseTopic = firebaseTopic;
 	}
 }

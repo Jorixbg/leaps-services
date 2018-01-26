@@ -8,29 +8,44 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Scanner;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 import javax.activation.DataHandler;
 import javax.activation.DataSource;
 import javax.activation.FileDataSource;
-import javax.mail.Address;
 import javax.mail.Message;
 import javax.mail.MessagingException;
 import javax.mail.Session;
-import javax.mail.internet.AddressException;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeBodyPart;
 import javax.mail.internet.MimeMessage;
 import javax.mail.internet.MimeMultipart;
 import javax.servlet.http.HttpServletRequest;
 
+import org.quartz.CronScheduleBuilder;
+import org.quartz.CronTrigger;
+import org.quartz.DateBuilder;
+import org.quartz.JobBuilder;
+import org.quartz.JobDetail;
+import org.quartz.Scheduler;
+import org.quartz.SchedulerException;
+import org.quartz.SchedulerFactory;
+import org.quartz.TriggerBuilder;
+import org.quartz.impl.StdSchedulerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.client.ClientHttpRequestInterceptor;
+import org.springframework.web.client.RestTemplate;
 
 // These are from the AWS SDK for Java, which you can download at https://aws.amazon.com/sdk-for-java.
 // Be sure to include the AWS SDK for Java library in your project.
@@ -46,7 +61,6 @@ import com.amazonaws.services.simpleemail.model.SendRawEmailRequest;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.leaps.controller.UserController;
 import com.leaps.model.db.DBUserDao;
 import com.leaps.model.event.Event;
 import com.leaps.model.event.EventDao;
@@ -58,14 +72,59 @@ import com.leaps.model.exceptions.TagException;
 import com.leaps.model.exceptions.UserException;
 import com.leaps.model.image.Image;
 import com.leaps.model.rate.Rate;
-import com.leaps.model.rate.RateDao;
-import com.leaps.model.token.Token;
 import com.leaps.model.user.User;
 import com.leaps.model.user.UserDao;
 
 public class LeapsUtils {
 
 	private static final Logger logger = LoggerFactory.getLogger(LeapsUtils.class);
+
+	// TODO: test
+	public static boolean checkIfValueIsValid(String checkedValue, Object[] values) {
+		boolean flag = false;
+		
+		if (checkedValue != null) {
+			for (int i = 0; i < values.length; i++) {
+				String enumValue = values[i].toString();
+				if (checkedValue.equalsIgnoreCase(enumValue)) {
+					flag = true;
+					break;
+				}
+			}
+		}
+		
+		return flag;
+	}
+	
+	public static void runScheduler() {
+		try {
+			SchedulerFactory sf = new StdSchedulerFactory();
+			Scheduler scheduler = sf.getScheduler();
+			
+			JobDetail job = JobBuilder.newJob(RepeatingEventTimer.class).withIdentity("dummyJobName", "group1").build();
+			
+			Date startTime = DateBuilder.nextGivenSecondDate(null, 10);
+			
+			// run every 30 minutes infinite loop
+			CronTrigger crontrigger = TriggerBuilder
+				.newTrigger()
+				.withIdentity("RepeatingEvents", "group1")
+				.startAt(startTime)
+				// startNow()
+				.withSchedule(CronScheduleBuilder.cronSchedule(Configuration.THIRTY_MINUTES + " * * * * ?"))
+				.build();
+			
+			scheduler.start();
+			scheduler.scheduleJob(job, crontrigger);
+			
+			// scheduler.shutdown();
+		} catch (SchedulerException se) {
+			se.printStackTrace();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+	
 	
 	/**
 	 * Util method to check whenever a given string is a number or not.
@@ -117,7 +176,7 @@ public class LeapsUtils {
 	 * Util method for getting the suffux of String (file name)
 	 */
 	public static String getFileExtension(String fileName) {
-		String suffix = null;		
+		String suffix = null;
 		int dotPosition = -1;
 		for (int i = fileName.length() - 1; i >= 0; i--) {
 			if (fileName.charAt(i) == '.') {
@@ -144,7 +203,7 @@ public class LeapsUtils {
 		double sindLng = Math.sin(dLng / 2);
 		double a = Math.pow(sindLat, 2) + Math.pow(sindLng, 2) * Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2));
 		double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-		double dist = earthRadius * c;
+		double dist = round(earthRadius * c, 2);
 		
 		return dist;
 	}
@@ -163,7 +222,8 @@ public class LeapsUtils {
 	 * @throws ImageException 
 	 * @throws TagException 
 	 */
-	public static JsonObject generateJsonEvent(Event event, Long token) throws UserException, EventException, ImageException, TagException {
+	public static JsonObject generateJsonEvent(Event event, Long token, Double requestingUserLatitude, 
+			Double requestingUserLongitude) throws UserException, EventException, ImageException, TagException {
 		User eventOwner = UserDao.getInstance().getUserFromDbOrCacheById(event.getOwnerId());
 		
 		JsonObject tempJson = new JsonObject();
@@ -176,6 +236,8 @@ public class LeapsUtils {
 		tempJson.addProperty("owner_id", event.getOwnerId());
 		tempJson.addProperty("owner_name", (eventOwner.getFirstName() + " " + eventOwner.getLastName().trim()));
 		tempJson.addProperty("owner_image_url", eventOwner.getProfileImageUrl());
+		tempJson.addProperty("distance", (requestingUserLatitude != null && requestingUserLongitude != null) ? 
+							calculateDistance(requestingUserLatitude, requestingUserLongitude, event) : null);
 		tempJson.addProperty("can_rate", token != null ? UserDao.getInstance().canRate(event, token) : false);
 		
 		List<Rate> rate = DBUserDao.getInstance().getRatesForEvent(event.getEventId());
@@ -206,7 +268,7 @@ public class LeapsUtils {
 		tempJson.addProperty("address", event.getAddress());
 		tempJson.addProperty("free_slots", event.getFreeSlots() - attending.size());
 		tempJson.addProperty("date_created", event.getDateCreated());
-		
+		tempJson.addProperty("firebase_topic", event.getFirebaseTopic());
 		
 		JsonArray imagesJson = new JsonArray();
 
@@ -224,8 +286,12 @@ public class LeapsUtils {
 		return tempJson;
 	}
 	
+	private static double calculateDistance(Double requestingUserLatitude, Double requestingUserLongitude, Event event) {
+		return distFrom(requestingUserLatitude, requestingUserLongitude, event.getCoordLatitude(), event.getCoordLongitude());
+	}
+
 	/**
-	 * Util method for getting average rate from a list of rates
+	 * Utility method for getting average rate from a list of rates
 	 */
 	public static double getEventRate(List<Rate> rate) {
 		double approxRate = 0;
@@ -247,7 +313,7 @@ public class LeapsUtils {
 	 * @throws ImageException 
 	 * @throws TagException 
 	 */
-	public static JsonObject generateJsonUser(User user, long token) throws EventException, UserException, ImageException, TagException {
+	public static JsonObject generateJsonUser(User user, Long token, Double lat, Double lng) throws EventException, UserException, ImageException, TagException {
 		JsonObject response = new JsonObject();
 		
 		response.addProperty("user_id", user.getUserId());
@@ -266,6 +332,7 @@ public class LeapsUtils {
 		response.addProperty("last_name", user.getLastName());
 		response.addProperty("birthday", user.getBirthday());
 		response.addProperty("profile_image_url", user.getProfileImageUrl());
+		response.addProperty("firebase_token", user.getFirebaseToken());
 		response.addProperty("is_trainer", user.isTrainer());
 		response.addProperty("long_description", user.isTrainer() ? user.getLongDescription() : null);
 		response.addProperty("years_of_training", user.isTrainer() ? user.getYearsOfTraining() : null);
@@ -295,14 +362,14 @@ public class LeapsUtils {
 		JsonArray attendingEventsJson = new JsonArray();
 		
 		for (int i = 0; i < attendingEvents.size(); i++) {
-			attendingEventsJson.add(LeapsUtils.generateJsonEvent(attendingEvents.get(i), token));
+			attendingEventsJson.add(LeapsUtils.generateJsonEvent(attendingEvents.get(i), token, lat, lng));
 		}
 		response.add("attending_events", attendingEventsJson);
 		
 		List<Event> hostingEvents = DBUserDao.getInstance().getAllHostingEventsForUser(user.getUserId());
 		JsonArray hostingEventsJson = new JsonArray();
 		for (int i = 0; i < hostingEvents.size(); i++) {			
-			hostingEventsJson.add(LeapsUtils.generateJsonEvent(hostingEvents.get(i), token));
+			hostingEventsJson.add(LeapsUtils.generateJsonEvent(hostingEvents.get(i), token, lat, lng));
 		}
 		response.add("hosting_events", hostingEventsJson);
 		
@@ -619,5 +686,65 @@ public class LeapsUtils {
 			}
 		}
 		logger.info(loggedTags.toString());
+	}
+
+	// TODO: not used atm
+	public static void attendEventInFirebase(User user, Event event) {
+		String eventFirebaseTopic = event.getFirebaseTopic();
+		String userFirebaseToken = user.getFirebaseToken();
+		
+		// TODO: write logic
+	}
+
+	// TODO: not used atm
+	public static void unattendEventInFirebase(User user, Event event) {
+		String eventFirebaseTopic = event.getFirebaseTopic();
+		String userFirebaseToken = user.getFirebaseToken();
+		
+		// TODO: write logic
+	}
+	
+	public static HttpStatus sendMessageToFirebaseTopic(String message, long eventId) throws EventException {		
+		String title = "Event change";
+		
+		JsonObject body = new JsonObject();
+		// the firebase topic is a string formatted event id
+		body.addProperty("to", "/topics/" + String.valueOf(eventId));
+		body.addProperty("priority", "high");
+		
+		JsonObject notification = new JsonObject();
+		notification.addProperty("title", title);
+		notification.addProperty("body", message);
+		
+		body.add("notification", notification);
+		
+		HttpEntity<String> request = new HttpEntity<>(body.toString());
+		
+		CompletableFuture<String> pushNotification = pushNotifications(request);
+		CompletableFuture.allOf(pushNotification).join();
+		
+		try {
+			pushNotification.get();
+			return HttpStatus.OK;
+		} catch (InterruptedException ie) {
+			logger.info(ie.getMessage());
+			throw new EventException(Configuration.ERROR_WHILE_SENDING_MESSAGE_TO_FIREBASE_TOPIC);
+		} catch (ExecutionException ee) {
+			logger.info(ee.getMessage());
+			throw new EventException(Configuration.ERROR_WHILE_SENDING_MESSAGE_TO_FIREBASE_TOPIC);
+		}
+	}
+	
+	public static CompletableFuture<String> pushNotifications(HttpEntity<String> entity) {
+		RestTemplate restTemplate = new RestTemplate();
+		
+		List<ClientHttpRequestInterceptor> interceptors = new ArrayList<>();
+		interceptors.add(new HeaderRequestInterceptor("Authorization", "key=" + Configuration.FIREBASE_SERVER_KEY));
+		interceptors.add(new HeaderRequestInterceptor("Content-Type", "application/json"));
+		restTemplate.setInterceptors(interceptors);
+ 
+		String firebaseResponse = restTemplate.postForObject(Configuration.FIREBASE_API_URL, entity, String.class);
+ 
+		return CompletableFuture.completedFuture(firebaseResponse);
 	}
 }

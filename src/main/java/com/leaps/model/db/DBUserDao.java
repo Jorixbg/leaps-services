@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.leaps.interfaces.IDBUserDao;
+import com.leaps.model.bean.RepeatingEvent;
 import com.leaps.model.event.Event;
 import com.leaps.model.event.EventDao;
 import com.leaps.model.event.Tag;
@@ -28,7 +29,6 @@ import com.leaps.model.rate.RateDao;
 import com.leaps.model.user.User;
 import com.leaps.model.user.UserDao;
 import com.leaps.model.utils.Configuration;
-import com.leaps.model.utils.DebuggingManager;
 
 public class DBUserDao implements IDBUserDao {
 
@@ -42,6 +42,14 @@ public class DBUserDao implements IDBUserDao {
 		if(instance == null)
 			instance = new DBUserDao();
 		return instance;
+	}
+
+	private User retrieveUser(ResultSet rs) throws SQLException {
+		return UserDao.getInstance().createNewUser(rs.getInt("user_id"), rs.getString("username"), rs.getString("email_address"), rs.getInt("age"), rs.getString("gender"),
+				   rs.getString("location"), rs.getInt("max_distance_setting"), rs.getString("first_name"), rs.getString("last_name"), 
+				   rs.getLong("birthday"), rs.getString("description"), rs.getString("profile_image_url"), rs.getBoolean("is_trainer"), 
+				   rs.getString("facebook_id"), rs.getString("google_id"), rs.getString("phone_number"),
+				   rs.getInt("session_price"), rs.getString("long_description"), rs.getInt("years_of_training"), rs.getString("firebase_token"));
 	}
 	
 	// close all connections method
@@ -168,11 +176,7 @@ public class DBUserDao implements IDBUserDao {
 			
 			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
-				user = UserDao.getInstance().createNewUser(rs.getInt("user_id"), rs.getString("username"), rs.getString("email_address"), rs.getInt("age"), rs.getString("gender"),
-						   rs.getString("location"), rs.getInt("max_distance_setting"), rs.getString("first_name"), rs.getString("last_name"), 
-						   rs.getLong("birthday"), rs.getString("description"), rs.getString("profile_image_url"), rs.getBoolean("is_trainer"), 
-						   rs.getString("facebook_id"), rs.getString("google_id"), rs.getString("phone_number"),
-						   rs.getInt("session_price"), rs.getString("long_description"), rs.getInt("years_of_training"));
+				user = retrieveUser(rs);
 			}
 			
 			return user;
@@ -187,13 +191,14 @@ public class DBUserDao implements IDBUserDao {
 		}
 	}
 	
-	public Long insertUserIntoDB(String username, String pass, String email, String firstName, String lastName, Long birthday, String facebookId, String gogleId, int age) throws UserException {
+	public Long insertUserIntoDB(String username, String pass, String email, String firstName, String lastName,
+								 Long birthday, String facebookId, String gogleId, int age, String firebaseToken) throws UserException {
 		Long userId = -1L;
 		
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
 		ResultSet generatedKeys = null;
-		String selectSQL = "INSERT INTO leaps.users (username, password, email_address, first_name, last_name, birthday, facebook_id, google_id, age, max_distance_setting) VALUES ( ? , ? , ? , ? , ? , ? , ? , ? , ? , ?)";
+		String selectSQL = "INSERT INTO leaps.users (username, password, email_address, first_name, last_name, birthday, facebook_id, google_id, age, max_distance_setting, firebase_token) VALUES ( ? , ? , ? , ? , ? , ? , ? , ? , ? , ? , ? )";
 		try {
 			dbConnection = DBManager.getInstance().getConnection();
 			preparedStatement = dbConnection.prepareStatement(selectSQL, Statement.RETURN_GENERATED_KEYS);
@@ -209,6 +214,7 @@ public class DBUserDao implements IDBUserDao {
 			
 			// set default max distance setting on creation of a new user
 			preparedStatement.setInt(10, Configuration.USER_DEFAULT_MAX_DISTANCE_SETTING);
+			preparedStatement.setString(11, firebaseToken);
 			
 			preparedStatement.execute();
 			
@@ -283,7 +289,7 @@ public class DBUserDao implements IDBUserDao {
 		}
 	}
 
-	// TODO: temprorary commenting an unused order
+	// TODO: unused order
 //	public List<Tag> getUserTokens(long ownerId, int tokenSizeForCreateEvent) {
 //		List<Tag> tags = new ArrayList<Tag>();
 //		Connection dbConnection = null;
@@ -326,15 +332,15 @@ public class DBUserDao implements IDBUserDao {
 //	}
 
 	public long createNewEvent(String title, String description, long date, long timeFrom, long timeTo, long ownerId, double latitude, 
-							   double longitute, int priceFrom, String address, int freeSlots, Long dateCreated) throws EventException {
+							   double longitute, int priceFrom, String address, int freeSlots, Long dateCreated, String eventFirebaseTopic) throws EventException {
 		long eventId = -1;
 		Connection dbConnection = null;
 		PreparedStatement preparedStatement = null;
 		ResultSet generatedKeys = null;
 		
 		String selectSQL = "INSERT INTO leaps.events (title, description, date, time_from, time_to, owner_id, coord_lat, coord_lnt, "
-												   + "price_from, address, free_slots, date_created, event_image_url)"
-												   + "VALUES ( ? , ? , ? , ? , ? , ? , ? , ? , ? , ? , ? , ? , ?)";
+												   + "price_from, address, free_slots, date_created, event_image_url, firebase_topic)"
+												   + "VALUES ( ? , ? , ? , ? , ? , ? , ? , ? , ? , ? , ? , ? , ? , ?)";
 		try {
 			dbConnection = DBManager.getInstance().getConnection();
 			preparedStatement = dbConnection.prepareStatement(selectSQL, Statement.RETURN_GENERATED_KEYS);
@@ -351,6 +357,7 @@ public class DBUserDao implements IDBUserDao {
 			preparedStatement.setInt(11, freeSlots);
 			preparedStatement.setLong(12, dateCreated);
 			preparedStatement.setString(13, null);
+			preparedStatement.setString(14, eventFirebaseTopic);
 			
 			preparedStatement.execute();
 
@@ -526,10 +533,7 @@ public class DBUserDao implements IDBUserDao {
 			
 			rs = preparedStatement.executeQuery();
             while (rs.next()) {
-            	user = UserDao.getInstance().createNewUser(userId, rs.getString("username"), rs.getString("email_address"), rs.getInt("age"), rs.getString("gender"), rs.getString("location"), 
-            								rs.getInt("max_distance_setting"), rs.getString("first_name"), rs.getString("last_name"), rs.getLong("birthday"), rs.getString("description"), 
-            								rs.getString("profile_image_url"), rs.getBoolean("is_trainer"), rs.getString("facebook_id"), rs.getString("google_id"), rs.getString("phone_number"), 
-            								rs.getInt("session_price"), rs.getString("long_description"), rs.getInt("years_of_training"));
+            	user = retrieveUser(rs);
             }
     		
     		return user;
@@ -580,8 +584,7 @@ public class DBUserDao implements IDBUserDao {
 		ResultSet rs = null;
 		PreparedStatement preparedStatement = null;
 		
-		String selectSQL = "SELECT title, description, date, time_from, time_to, owner_id, coord_lat, coord_lnt, "
-				   + "price_from, address, free_slots, event_image_url FROM leaps.events WHERE event_id = ?";
+		String selectSQL = "SELECT * FROM leaps.events WHERE event_id = ?";
 		
 		try {
 			dbConnection = DBManager.getInstance().getConnection();
@@ -592,7 +595,7 @@ public class DBUserDao implements IDBUserDao {
 			while (rs.next()) {
 				event = EventDao.getInstance().generateNewEvent(eventId, rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), rs.getLong("time_to"), rs.getLong("owner_id"), rs.getString("event_image_url"),
 								 rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"),rs.getInt("price_from"), rs.getString("address"),
-								 rs.getInt("free_slots"), rs.getLong("date"));
+								 rs.getInt("free_slots"), rs.getLong("date"), rs.getString("firebase_topic"));
 			}
 			
 			return event;
@@ -622,11 +625,7 @@ public class DBUserDao implements IDBUserDao {
 			
 			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
-				users.add(UserDao.getInstance().createNewUser(rs.getInt("user_id"), rs.getString("username"), rs.getString("email_address"), rs.getInt("age"), rs.getString("gender"),
-						   rs.getString("location"), rs.getInt("max_distance_setting"), rs.getString("first_name"), rs.getString("last_name"), 
-						   rs.getLong("birthday"), rs.getString("description"), rs.getString("profile_image_url"), rs.getBoolean("is_trainer"), 
-						   rs.getString("facebook_id"), rs.getString("google_id"), rs.getString("phone_number"),
-						   rs.getInt("session_price"), rs.getString("long_description"), rs.getInt("years_of_training")));
+				users.add(retrieveUser(rs));
 			}
 			
 			return users;
@@ -798,10 +797,7 @@ public class DBUserDao implements IDBUserDao {
 		PreparedStatement preparedStatement = null;
 		ResultSet rs = null;
 		
-		String selectSQL = "SELECT e.event_id, e.title, e.description, e.date, e.time_from, e.time_to, e.owner_id, e.coord_lat, e.coord_lnt, e.price_from, e.address, e.free_slots, e.date_created, e.event_image_url"
-						+ "	FROM leaps.events e"
-						+ "	WHERE e.event_id in"
-						+ " (SELECT uae.event_id FROM leaps.users_attend_events uae WHERE uae.user_id = ?)";
+		String selectSQL = "SELECT e.* FROM leaps.events e WHERE e.event_id in (SELECT uae.event_id FROM leaps.users_attend_events uae WHERE uae.user_id = ?)";
 		
 		try {
 			dbConnection = DBManager.getInstance().getConnection();
@@ -812,7 +808,7 @@ public class DBUserDao implements IDBUserDao {
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), rs.getLong("time_to"), 
 						userId, rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"), rs.getInt("price_from"), rs.getString("address"),
-						rs.getInt("free_slots"), rs.getLong("date")));
+						rs.getInt("free_slots"), rs.getLong("date"), rs.getString("firebase_topic")));
 			}
 			
 			return events;
@@ -834,8 +830,7 @@ public class DBUserDao implements IDBUserDao {
 		PreparedStatement preparedStatement = null;
 		ResultSet rs = null;
 		
-		String selectSQL = "SELECT e.event_id, e.title, e.description, e.date, e.time_from, e.time_to, e.owner_id, e.coord_lat, e.coord_lnt, e.price_from, e.address, e.free_slots, e.date_created, e.event_image_url"
-						 + " FROM leaps.events e WHERE e.owner_id = ?";
+		String selectSQL = "SELECT * FROM leaps.events WHERE owner_id = ?";
 		
 		try {
 			dbConnection = DBManager.getInstance().getConnection();
@@ -846,7 +841,7 @@ public class DBUserDao implements IDBUserDao {
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), rs.getLong("time_to"), 
 						userId, rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"), rs.getInt("price_from"), rs.getString("address"),
-						rs.getInt("free_slots"), rs.getLong("date")));
+						rs.getInt("free_slots"), rs.getLong("date"), rs.getString("firebase_topic")));
 			}			
 
 			return events;
@@ -948,8 +943,7 @@ public class DBUserDao implements IDBUserDao {
 		PreparedStatement preparedStatement = null;
 		ResultSet rs = null;
 		
-		String selectSQL = "SELECT e.event_id, e.title, e.description, e.date, e.time_from, e.time_to, e.owner_id, e.coord_lat, e.coord_lnt, e.price_from, e.address, e.free_slots, e.date_created, e.event_image_url"
-						 + " FROM leaps.events e WHERE e.owner_id = ? AND e.fime_from < ? LIMIT ?, ?";
+		String selectSQL = "SELECT * FROM leaps.events e WHERE e.owner_id = ? AND e.time_from < ? LIMIT ?, ?";
 		
 		try {
 			dbConnection = DBManager.getInstance().getConnection();
@@ -964,7 +958,7 @@ public class DBUserDao implements IDBUserDao {
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), rs.getLong("time_to"), 
 						userId, rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"), rs.getInt("price_from"), rs.getString("address"),
-						rs.getInt("free_slots"), rs.getLong("date")));
+						rs.getInt("free_slots"), rs.getLong("date"), rs.getString("firebase_topic")));
 			}			
 
 			return events;
@@ -986,8 +980,7 @@ public class DBUserDao implements IDBUserDao {
 		PreparedStatement preparedStatement = null;
 		ResultSet rs = null;
 		
-		String selectSQL = "SELECT e.event_id, e.title, e.description, e.date, e.time_from, e.time_to, e.owner_id, e.coord_lat, e.coord_lnt, e.price_from, e.address, e.free_slots, e.date_created, e.event_image_url"
-						 + " FROM leaps.events e WHERE e.owner_id = ? AND e.time_from >= ? LIMIT ?, ?";
+		String selectSQL = "SELECT * FROM leaps.events WHERE owner_id = ? AND time_from >= ? LIMIT ?, ?";
 		
 		try {
 			dbConnection = DBManager.getInstance().getConnection();
@@ -1002,7 +995,7 @@ public class DBUserDao implements IDBUserDao {
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), rs.getLong("time_to"), 
 						userId, rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"), rs.getInt("price_from"), rs.getString("address"),
-						rs.getInt("free_slots"), rs.getLong("date")));
+						rs.getInt("free_slots"), rs.getLong("date"), rs.getString("firebase_topic")));
 			}
 			
 			return events;
@@ -1024,11 +1017,7 @@ public class DBUserDao implements IDBUserDao {
 		PreparedStatement preparedStatement = null;
 		ResultSet rs = null;
 		
-		String selectSQL = "SELECT e.event_id, e.title, e.description, e.date, e.time_from, e.time_to, e.owner_id, e.coord_lat, e.coord_lnt, e.price_from, e.address, e.free_slots, e.date_created, e.event_image_url"
-				+ "	FROM leaps.events e"
-				+ "	WHERE e.event_id in"
-				+ " (SELECT uae.event_id FROM leaps.users_attend_events uae WHERE uae.user_id = ?)"
-				+ " AND e.time_from < ? LIMIT ?, ?";
+		String selectSQL = "SELECT e.* FROM leaps.events e WHERE e.event_id in (SELECT uae.event_id FROM leaps.users_attend_events uae WHERE uae.user_id = ?) AND e.time_from < ? LIMIT ?, ?";
 		
 		try {
 			dbConnection = DBManager.getInstance().getConnection();
@@ -1043,7 +1032,7 @@ public class DBUserDao implements IDBUserDao {
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), rs.getLong("time_to"), 
 						userId, rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"), rs.getInt("price_from"), rs.getString("address"),
-						rs.getInt("free_slots"), rs.getLong("date")));
+						rs.getInt("free_slots"), rs.getLong("date"), rs.getString("firebase_topic")));
 			}
 			
 			return events;
@@ -1065,11 +1054,7 @@ public class DBUserDao implements IDBUserDao {
 		PreparedStatement preparedStatement = null;
 		ResultSet rs = null;
 		
-		String selectSQL = "SELECT e.event_id, e.title, e.description, e.date, e.time_from, e.time_to, e.owner_id, e.coord_lat, e.coord_lnt, e.price_from, e.address, e.free_slots, e.date_created, e.event_image_url"
-				+ "	FROM leaps.events e"
-				+ "	WHERE e.event_id in"
-				+ " (SELECT uae.event_id FROM leaps.users_attend_events uae WHERE uae.user_id = ?)"
-				+ " AND e.time_from >= ? LIMIT ?, ?";
+		String selectSQL = "SELECT e.* FROM leaps.events e	WHERE e.event_id IN  (SELECT uae.event_id FROM leaps.users_attend_events uae WHERE uae.user_id = ?) AND e.time_from >= ? LIMIT ?, ?";
 		
 		try {
 			dbConnection = DBManager.getInstance().getConnection();
@@ -1084,7 +1069,7 @@ public class DBUserDao implements IDBUserDao {
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), rs.getLong("time_to"), 
 						rs.getLong("owner_id"), rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"), rs.getInt("price_from"), rs.getString("address"),
-						rs.getInt("free_slots"), rs.getLong("date")));
+						rs.getInt("free_slots"), rs.getLong("date"), rs.getString("firebase_topic")));
 			}
 			
 			return events;
@@ -1428,7 +1413,7 @@ public class DBUserDao implements IDBUserDao {
 		ResultSet rs = null;
 		
 		String selectSQL = "SELECT u.user_id, u.username, u.email_address, u.password, u.age, u.gender, u.location, u.max_distance_setting, u.first_name, u.last_name, u.birthday,"
-				+ " u.description, u.profile_image_url, u.is_trainer, u.facebook_id, u.google_id, u.phone_number, u.years_of_training, u.session_price, u.long_description"
+				+ " u.description, u.profile_image_url, u.is_trainer, u.facebook_id, u.google_id, u.phone_number, u.years_of_training, u.session_price, u.long_description, u.firebase_token"
 				+ " FROM leaps.events e"
 				+ " LEFT JOIN leaps.users u"
 				+ " ON u.user_id = e.owner_id"
@@ -1444,10 +1429,7 @@ public class DBUserDao implements IDBUserDao {
 			
 			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
-				users.add(UserDao.getInstance().createNewUser(rs.getLong("user_id"), rs.getString("username"), rs.getString("email_address"), rs.getInt("age"), rs.getString("gender"), rs.getString("location"), 
-						rs.getInt("max_distance_setting"), rs.getString("first_name"), rs.getString("last_name"), rs.getLong("birthday"), rs.getString("description"), 
-						rs.getString("profile_image_url"), rs.getBoolean("is_trainer"), rs.getString("facebook_id"), rs.getString("google_id"), rs.getString("phone_number"), 
-						rs.getInt("session_price"), rs.getString("long_description"), rs.getInt("years_of_training")));
+				users.add(retrieveUser(rs));
 			}
 			
 			return users;
@@ -1471,7 +1453,7 @@ public class DBUserDao implements IDBUserDao {
 		PreparedStatement preparedStatement = null;
 		ResultSet rs = null;
 		
-		String selectSQL = "SELECT e.event_id, e.title, e.description, e.date, e.time_from, e.time_to, e.owner_id, e.coord_lat, e.coord_lnt, e.price_from, e.address, e.free_slots, e.event_image_url"
+		String selectSQL = "SELECT *"
 						 + " FROM leaps.events e"
 						 + " LEFT JOIN leaps.users_attend_events uae"
 						 + " ON uae.event_id = e.event_id"
@@ -1492,7 +1474,7 @@ public class DBUserDao implements IDBUserDao {
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), 
 						rs.getLong("time_to"), rs.getLong("owner_id"), rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"),rs.getInt("price_from"), 
-						rs.getString("address"), rs.getInt("free_slots"), rs.getLong("date")));
+						rs.getString("address"), rs.getInt("free_slots"), rs.getLong("date"), rs.getString("firebase_topic")));
 			}
 			
 			return events;
@@ -1527,7 +1509,7 @@ public class DBUserDao implements IDBUserDao {
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), 
 						rs.getLong("time_to"), rs.getLong("owner_id"), rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"),rs.getInt("price_from"), 
-						rs.getString("address"), rs.getInt("free_slots"), rs.getLong("date")));
+						rs.getString("address"), rs.getInt("free_slots"), rs.getLong("date"), rs.getString("firebase_topic")));
 			}
 			
 			return events;
@@ -1566,7 +1548,7 @@ public class DBUserDao implements IDBUserDao {
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), 
 						rs.getLong("time_to"), rs.getLong("owner_id"), rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"),rs.getInt("price_from"), 
-						rs.getString("address"), rs.getInt("free_slots"), rs.getLong("date")));
+						rs.getString("address"), rs.getInt("free_slots"), rs.getLong("date"), rs.getString("firebase_topic")));
 			}
 			
 			return events;
@@ -1652,7 +1634,7 @@ public class DBUserDao implements IDBUserDao {
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), 
 						rs.getLong("time_to"), rs.getLong("owner_id"), rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"),rs.getInt("price_from"), 
-						rs.getString("address"), rs.getInt("free_slots"), rs.getLong("date")));
+						rs.getString("address"), rs.getInt("free_slots"), rs.getLong("date"), rs.getString("firebase_topic")));
 			}
 			
 			return events;
@@ -1730,7 +1712,7 @@ public class DBUserDao implements IDBUserDao {
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), 
 						rs.getLong("time_to"), rs.getLong("owner_id"), rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"),rs.getInt("price_from"), 
-						rs.getString("address"), rs.getInt("free_slots"), rs.getLong("date")));
+						rs.getString("address"), rs.getInt("free_slots"), rs.getLong("date"), rs.getString("firebase_topic")));
 			}			
 
 			return events;
@@ -1824,10 +1806,7 @@ public class DBUserDao implements IDBUserDao {
 			
 			rs = preparedStatement.executeQuery();
 			while (rs.next()) {
-				trainers.add(UserDao.getInstance().createNewUser(rs.getLong("user_id"), rs.getString("username"), rs.getString("email_address"), rs.getInt("age"), rs.getString("gender"), rs.getString("location"), 
-						rs.getInt("max_distance_setting"), rs.getString("first_name"), rs.getString("last_name"), rs.getLong("birthday"), rs.getString("description"), 
-						rs.getString("profile_image_url"), rs.getBoolean("is_trainer"), rs.getString("facebook_id"), rs.getString("google_id"), rs.getString("phone_number"), 
-						rs.getInt("session_price"), rs.getString("long_description"), rs.getInt("years_of_training")));
+				trainers.add(retrieveUser(rs));
 			}
 			
 			return trainers;
@@ -1906,10 +1885,7 @@ public class DBUserDao implements IDBUserDao {
 			rs = preparedStatement.executeQuery();
 			
 			while (rs.next()) {
-				trainers.add(UserDao.getInstance().createNewUser(rs.getLong("user_id"), rs.getString("username"), rs.getString("email_address"), rs.getInt("age"), rs.getString("gender"), rs.getString("location"), 
-						rs.getInt("max_distance_setting"), rs.getString("first_name"), rs.getString("last_name"), rs.getLong("birthday"), rs.getString("description"), 
-						rs.getString("profile_image_url"), rs.getBoolean("is_trainer"), rs.getString("facebook_id"), rs.getString("google_id"), rs.getString("phone_number"), 
-						rs.getInt("session_price"), rs.getString("long_description"), rs.getInt("years_of_training")));
+				trainers.add(retrieveUser(rs));
 			}
 			
 			return trainers;
@@ -2632,7 +2608,7 @@ public class DBUserDao implements IDBUserDao {
 			while (rs.next()) {
 				events.add(EventDao.getInstance().generateNewEvent(rs.getLong("event_id"), rs.getString("title"), rs.getString("description"), rs.getLong("date"), rs.getLong("time_from"), 
 						rs.getLong("time_to"), rs.getLong("owner_id"), rs.getString("event_image_url"), rs.getDouble("coord_lat"), rs.getDouble("coord_lnt"),rs.getInt("price_from"), 
-						rs.getString("address"), rs.getInt("free_slots"), rs.getLong("date")));
+						rs.getString("address"), rs.getInt("free_slots"), rs.getLong("date"), rs.getString("firebase_topic")));
 			}
 			
 			return events;
@@ -2930,6 +2906,507 @@ public class DBUserDao implements IDBUserDao {
 			throw new UserException(Configuration.NO_USER_FOUND);
 		} finally {
 			closeResources(preparedStatement, rs, dbConnection);
+		}
+	}
+
+	public List<User> getFilteredTrainersByText(String keyWord, int page, int limit) throws UserException {
+		List<User> trainers = new ArrayList<User>();
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
+		
+		String selectSql = "SELECT distinct u.* FROM leaps.users as u WHERE u.is_trainer = 1 AND "
+					+ "(u.username LIKE ? OR u.description LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ?) LIMIT ?, ?";
+		String likeKeyword = "%" + keyWord + "%";
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSql);
+			preparedStatement.setString(1, likeKeyword);
+			preparedStatement.setString(2, likeKeyword);
+			preparedStatement.setString(3, likeKeyword);
+			preparedStatement.setString(4, likeKeyword);
+			preparedStatement.setInt(5, (page - 1) * limit);
+			preparedStatement.setInt(6, limit);
+			
+			rs = preparedStatement.executeQuery();
+			
+			while (rs.next()) {
+				trainers.add(retrieveUser(rs));
+			}
+			
+			return trainers;
+		} catch (SQLException e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			throw new UserException(Configuration.NO_USER_FOUND);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
+		}
+	}
+
+	public int countFilteredTrainersByText(String keyWord) throws UserException {
+		int count = -1;
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
+		
+		String selectSql = "SELECT count(*) as 'count' FROM leaps.users as u WHERE u.is_trainer = 1 AND "
+					+ "(u.username LIKE ? OR u.description LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ?)";
+		String likeKeyword = "%" + keyWord + "%";
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSql);
+			preparedStatement.setString(1, likeKeyword);
+			preparedStatement.setString(2, likeKeyword);
+			preparedStatement.setString(3, likeKeyword);
+			preparedStatement.setString(4, likeKeyword);
+			
+			rs = preparedStatement.executeQuery();
+			
+			if (rs.next()) {
+				count = rs.getInt("count");
+			}
+			
+			return count;
+		} catch (SQLException e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			throw new UserException(Configuration.NO_USER_FOUND);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
+		}
+	}
+
+	public List<User> getFilteredTrainersByTags(List<String> tags, int page, int limit) throws UserException {
+		List<User> trainers = new ArrayList<User>();
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
+		
+		StringBuilder selectSql = new StringBuilder("SELECT distinct u.* FROM leaps.users as u JOIN leaps.events as e ON e.owner_id = u.user_id "
+										   + "JOIN leaps.event_has_tags as et ON e.event_id = et.event_id JOIN leaps.tags as t ON et.tag_id = t.tag_id "
+										   + "WHERE u.is_trainer = 1 AND (");
+		for (int i = 0; i < tags.size(); i++) {
+			selectSql.append("t.name = ?");
+			if (i + 1 < tags.size()) {
+				selectSql.append(" OR ");
+			}
+		}
+		selectSql.append(") UNION SELECT distinct u.* "
+						 + "FROM leaps.users as u LEFT JOIN leaps.events as e ON e.owner_id = u.user_id WHERE e.owner_id IS NULL LIMIT ?, ?");
+		
+		int counter = 1;
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSql.toString());
+			for (int i = 0; i < tags.size(); i++) {
+				preparedStatement.setString(counter++, tags.get(i));
+			}
+			preparedStatement.setInt(counter++, (page - 1) * limit);
+			preparedStatement.setInt(counter++, limit);
+			
+			rs = preparedStatement.executeQuery();
+			
+			while (rs.next()) {
+				trainers.add(retrieveUser(rs));
+			}
+			
+			return trainers;
+		} catch (SQLException e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			throw new UserException(Configuration.NO_USER_FOUND);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
+		}
+	}
+
+	public int countFilteredTrainersByTags(List<String> tags) throws UserException {
+		int result = 0;
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
+		
+		StringBuilder selectSql = new StringBuilder("SELECT distinct u.* FROM leaps.users as u JOIN leaps.events as e ON e.owner_id = u.user_id "
+										   + "JOIN leaps.event_has_tags as et ON e.event_id = et.event_id JOIN leaps.tags as t ON et.tag_id = t.tag_id "
+										   + "WHERE u.is_trainer = 1 AND (");
+		for (int i = 0; i < tags.size(); i++) {
+			selectSql.append("t.name = ?");
+			if (i + 1 < tags.size()) {
+				selectSql.append(" OR ");
+			}
+		}
+		selectSql.append(") UNION SELECT distinct u.* "
+						 + "FROM leaps.users as u LEFT JOIN leaps.events as e ON e.owner_id = u.user_id WHERE e.owner_id IS NULL");
+		
+		int counter = 1;
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSql.toString());
+			for (int i = 0; i < tags.size(); i++) {
+				preparedStatement.setString(counter++, tags.get(i));
+			}
+			
+			rs = preparedStatement.executeQuery();
+			
+			while (rs.next()) {
+				result++;
+			}
+			
+			return result;
+		} catch (SQLException e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			throw new UserException(Configuration.NO_USER_FOUND);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
+		}
+	}
+
+	
+	public List<User> getAllFilteredTrainers(int page, int limit) throws UserException {
+		List<User> trainers = new ArrayList<User>();
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
+		
+		String selectSql = "SELECT * FROM leaps.users WHERE is_trainer = TRUE LIMIT ?, ?";
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSql);
+			preparedStatement.setInt(1, (page - 1) * limit);
+			preparedStatement.setInt(2, limit);
+			
+			rs = preparedStatement.executeQuery();
+			
+			while (rs.next()) {
+				trainers.add(retrieveUser(rs));
+			}
+			
+			return trainers;
+		} catch (SQLException e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			throw new UserException(Configuration.NO_USER_FOUND);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
+		}
+	}
+
+	
+	
+	public int countAllFilteredTrainers() throws UserException {
+		int count = -1;
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
+		
+		String selectSql = "SELECT count(user_id) as 'count' FROM leaps.users WHERE is_trainer = TRUE";
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSql);
+			
+			rs = preparedStatement.executeQuery();
+			
+			if (rs.next()) {
+				count = rs.getInt("count");
+			}
+			
+			return count;
+		} catch (SQLException e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			throw new UserException(Configuration.NO_USER_FOUND);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
+		}
+	}
+
+	public List<User> getFilteredTrainersByTextAndTags(String keyWord, List<String> tags, int page, int limit) throws UserException {
+		List<User> trainers = new ArrayList<User>();
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
+		
+		StringBuilder selectSql = new StringBuilder("SELECT distinct u.* FROM leaps.users as u JOIN leaps.events as e "
+												  + "ON e.owner_id = u.user_id JOIN leaps.event_has_tags as et ON e.event_id = et.event_id "
+												  + "JOIN leaps.tags as t ON et.tag_id = t.tag_id WHERE u.is_trainer = 1  AND (");
+		for (int i = 0; i < tags.size(); i++) {
+			selectSql.append("t.name = ?");
+			if (i + 1 < tags.size()) {
+				selectSql.append(" OR ");
+			}
+		}
+		selectSql.append(") AND (u.username LIKE ? OR u.description LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ?) "
+					   + "UNION SELECT distinct u.* FROM leaps.users as u LEFT JOIN leaps.events as e ON e.owner_id = u.user_id WHERE e.owner_id IS NULL "
+					   + "AND (u.username LIKE ? OR u.description LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ?) LIMIT ?, ?");
+		
+		String likeKeyword = "%" + keyWord + "%";
+		int counter = 1;
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSql.toString());
+			for (int i = 0; i < tags.size(); i++) {
+				preparedStatement.setString(counter++, tags.get(i));
+			}
+			preparedStatement.setString(counter++, likeKeyword);
+			preparedStatement.setString(counter++, likeKeyword);
+			preparedStatement.setString(counter++, likeKeyword);
+			preparedStatement.setString(counter++, likeKeyword);
+			preparedStatement.setString(counter++, likeKeyword);
+			preparedStatement.setString(counter++, likeKeyword);
+			preparedStatement.setString(counter++, likeKeyword);
+			preparedStatement.setString(counter++, likeKeyword);
+			preparedStatement.setInt(counter++, (page - 1) * limit);
+			preparedStatement.setInt(counter++, limit);
+			
+			rs = preparedStatement.executeQuery();
+			
+			while (rs.next()) {
+				trainers.add(retrieveUser(rs));
+			}
+			
+			return trainers;
+		} catch (SQLException e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			throw new UserException(Configuration.NO_USER_FOUND);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
+		}
+	}
+
+	public int countFilteredTrainersByTextAndTags(String keyWord, List<String> tags) throws UserException {
+		int result = 0;
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
+		
+		StringBuilder selectSql = new StringBuilder("SELECT distinct u.* FROM leaps.users as u JOIN leaps.events as e "
+												  + "ON e.owner_id = u.user_id JOIN leaps.event_has_tags as et ON e.event_id = et.event_id "
+												  + "JOIN leaps.tags as t ON et.tag_id = t.tag_id WHERE u.is_trainer = 1  AND (");
+		for (int i = 0; i < tags.size(); i++) {
+			selectSql.append("t.name = ?");
+			if (i + 1 < tags.size()) {
+				selectSql.append(" OR ");
+			}
+		}
+		selectSql.append(") AND (u.username LIKE ? OR u.description LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ?) "
+					   + "UNION SELECT distinct u.* FROM leaps.users as u LEFT JOIN leaps.events as e ON e.owner_id = u.user_id WHERE e.owner_id IS NULL "
+					   + "AND (u.username LIKE ? OR u.description LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ?)");
+		
+		String likeKeyword = "%" + keyWord + "%";
+		int counter = 1;
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSql.toString());
+			for (int i = 0; i < tags.size(); i++) {
+				preparedStatement.setString(counter++, tags.get(i));
+			}
+			preparedStatement.setString(counter++, likeKeyword);
+			preparedStatement.setString(counter++, likeKeyword);
+			preparedStatement.setString(counter++, likeKeyword);
+			preparedStatement.setString(counter++, likeKeyword);
+			preparedStatement.setString(counter++, likeKeyword);
+			preparedStatement.setString(counter++, likeKeyword);
+			preparedStatement.setString(counter++, likeKeyword);
+			preparedStatement.setString(counter++, likeKeyword);
+			
+			rs = preparedStatement.executeQuery();
+			
+			while (rs.next()) {
+				result++;
+			}
+			
+			return result;
+		} catch (SQLException e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			throw new UserException(Configuration.NO_USER_FOUND);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
+		}
+	}
+
+	public void removeUserSpecialtiesFromDb(Long userId) throws UserException {
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		
+		String selectSQL = "DELETE FROM leaps.specialties WHERE user_id = ?";
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSQL);
+			preparedStatement.setLong(1, userId);
+			
+			preparedStatement.executeUpdate();
+		} catch (Exception e) {
+			if (Configuration.debugMode) {
+				logger.info("SQL Statement: " + preparedStatement.toString());
+			}
+			throw new UserException(Configuration.CANNOT_DELETE_SPECIALTIES_FOR_USER);
+		} finally {
+			closeResources(preparedStatement, null, dbConnection);
+		}
+	}
+
+	public void addUserSpecialtiesToTheDB(List<String> specialties, Long userId) throws UserException {
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		
+		StringBuilder selectTagsStatement = new StringBuilder("INSERT INTO leaps.specialties ( user_id , name ) VALUES ");
+		for (int i = 0; i < specialties.size(); i++) {
+			selectTagsStatement.append("( ? , ? )");
+			if (i + 1 < specialties.size()) {
+				selectTagsStatement.append(", ");
+			}
+		}
+
+		int counter = 1;
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectTagsStatement.toString());
+			for (int i = 0; i < specialties.size(); i++) {
+				preparedStatement.setLong(counter++, userId);
+				preparedStatement.setString(counter++, specialties.get(i));
+			}
+			
+			preparedStatement.executeUpdate();
+		} catch (Exception e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			
+			throw new UserException(Configuration.CANNOT_INSERT_SPECIALTIES_IN_THE_DB);
+		} finally {
+			closeResources(preparedStatement, null, dbConnection);
+		}
+	}
+
+	public long createRepeatingEvent(RepeatingEvent repeatingEvents, long parentId) throws EventException {
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		ResultSet generatedKeys = null;
+		long id = -1;
+		
+		String selectSQL = "INSERT INTO leaps.repeating_events ( parent_event_id , event_start_time , event_end_time , exist) VALUES ( ? , ? , ? , ? )";
+
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSQL, Statement.RETURN_GENERATED_KEYS);
+			preparedStatement.setLong(1, parentId);
+			preparedStatement.setLong(2, repeatingEvents.getStartTime());
+			preparedStatement.setLong(3, repeatingEvents.getEndTime());
+			preparedStatement.setBoolean(4, repeatingEvents.isExist());
+			
+			preparedStatement.execute();
+			
+			generatedKeys = preparedStatement.getGeneratedKeys();
+            if (generatedKeys.next()) {
+            	id = generatedKeys.getLong(1);
+            }
+            
+            return id;
+		} catch (Exception e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			
+			throw new EventException(Configuration.CANNOT_INSERT_SPECIALTIES_IN_THE_DB);
+		} finally {
+			closeResources(preparedStatement, generatedKeys, dbConnection);
+		}
+	}
+
+	public List<RepeatingEvent> getScheduledRepeatingEvents() throws EventException {
+		List<RepeatingEvent> events = new ArrayList<RepeatingEvent>();
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
+		
+		long currentTime = System.currentTimeMillis();
+		
+		String selectSQL = "SELECT * FROM leaps.repeating_events WHERE event_start_time < ? AND exist = false";
+
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSQL);
+			preparedStatement.setLong(1, currentTime);
+			rs = preparedStatement.executeQuery();
+			
+			while(rs.next()) {
+				events.add(new RepeatingEvent(rs.getLong("parent_event_id"), rs.getLong("event_start_time"), rs.getLong("event_end_time"), rs.getBoolean("exist"), rs.getLong("id")));
+			}
+			
+			return events;
+		} catch (Exception e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			
+			throw new EventException(Configuration.CANNOT_INSERT_SPECIALTIES_IN_THE_DB);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
+		}
+	}
+
+	public boolean updateRepeatingEvent(long id, long parentId) throws EventException {
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		String selectSQL = "update leaps.repeating_events set event_id = ?, exist = ? WHERE id = ?";
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSQL);
+			preparedStatement.setLong(1, parentId);
+			preparedStatement.setBoolean(2, true);
+			preparedStatement.setLong(3, id);
+			preparedStatement.execute();
+			
+			return true;
+		} catch (Exception e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			
+			throw new EventException(Configuration.NO_USER_FOUND);
+		} finally {
+			closeResources(preparedStatement, null, dbConnection);
+		}
+	}
+
+	public void updateUserFirebaseToken(long userId, String firebaseToken) throws UserException {
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		String selectSQL = "UPDATE leaps.users SET firebase_token = ? WHERE user_id = ?";
+		
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSQL);
+			preparedStatement.setString(1, firebaseToken);
+			preparedStatement.setLong(2, userId);
+			preparedStatement.execute();
+		} catch (Exception e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			
+			throw new UserException(Configuration.ERROR_UPDATING_FIREBASE_TOKEN);
+		} finally {
+			closeResources(preparedStatement, null, dbConnection);
 		}
 	}
 }
