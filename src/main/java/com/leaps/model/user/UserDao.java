@@ -243,14 +243,24 @@ public class UserDao implements IUserDao {
 
 	public boolean resetPassword(String email) throws Exception {
 		boolean success = false;
+		User user = DBUserDao.getInstance().getUserFromDbByEmail(email);
+		String oldPass = user.getPass();
 		
-		if (DBUserDao.getInstance().checkIfUserExistInDBByEmail(email)) {
+		if (user != null) {
 			String pass = LeapsUtils.generateRandomPass();
 			String hashedPass = LeapsUtils.convertToMd5(pass);
 			boolean resetPassword = DBUserDao.getInstance().resetUserPassword(email, hashedPass);
 			if (resetPassword) {
-				LeapsUtils.resetPassword(email, pass);
-				success = true;
+				boolean reset = LeapsUtils.sendMailToUser(email, pass);
+				if (reset) {
+					success = true;
+				} else {
+					Map<String, Map<String, Object>> params = new HashMap<String, Map<String, Object>>();
+					params.put("password", new HashMap<String, Object>());
+					params.get("password").put("string", oldPass);
+					
+					DBUserDao.getInstance().updateUser(params, user.getUserId());
+				}
 			}
 		}
 		
@@ -258,10 +268,11 @@ public class UserDao implements IUserDao {
 	}
 	
 	public User getUserFromDbOrCacheById(long userId) throws UserException {
-		User user = getUserFromCacheById(userId);
-		if (user == null) {
-			user = DBUserDao.getInstance().getUserFromDbById(userId);
-		}
+//		User user = getUserFromCacheById(userId);
+//		if (user == null) {
+		// remove usage of cache
+		User user = DBUserDao.getInstance().getUserFromDbById(userId);
+//		}
 		
 		return user;
 	}

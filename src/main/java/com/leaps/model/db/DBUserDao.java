@@ -283,7 +283,8 @@ public class DBUserDao implements IDBUserDao {
 				logger.error(e.getMessage());
 			}
 			
-			throw new UserException(Configuration.NO_USER_FOUND);
+			return false;
+//			throw new UserException(Configuration.NO_USER_FOUND);
 		} finally {
 			closeResources(preparedStatement, null, dbConnection);
 		}
@@ -530,6 +531,35 @@ public class DBUserDao implements IDBUserDao {
 			dbConnection = DBManager.getInstance().getConnection();
 			preparedStatement = dbConnection.prepareStatement(selectSql);
 			preparedStatement.setLong(1, userId);
+			
+			rs = preparedStatement.executeQuery();
+            while (rs.next()) {
+            	user = retrieveUser(rs);
+            }
+    		
+    		return user;
+        } catch (Exception e) {
+			if (Configuration.debugMode) {
+				logger.error(e.getMessage());
+			}
+			
+			throw new UserException(Configuration.ERROR_RETREIVING_THE_USERS);
+		} finally {
+			closeResources(preparedStatement, rs, dbConnection);
+		}
+	}
+	
+	public User getUserFromDbByEmail(String email) throws UserException {
+		User user = null;
+		Connection dbConnection = null;
+		PreparedStatement preparedStatement = null;
+		ResultSet rs = null;
+		
+		String selectSql = "Select * from leaps.users WHERE email_address = ?";
+		try {
+			dbConnection = DBManager.getInstance().getConnection();
+			preparedStatement = dbConnection.prepareStatement(selectSql);
+			preparedStatement.setString(1, email);
 			
 			rs = preparedStatement.executeQuery();
             while (rs.next()) {

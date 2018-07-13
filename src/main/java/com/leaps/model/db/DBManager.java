@@ -10,8 +10,8 @@ public class DBManager {
 	private final String JDBC_DRIVER = "com.mysql.jdbc.Driver";
 	
 	private final String USER = "root";
-	private final String PASS = "LeapsRoot";
-	private final String HOSTNAME = "leaps.carvx2s9bjqi.eu-central-1.rds.amazonaws.com";
+	private final String PASS = "Leaps1337.";
+	private final String HOSTNAME = "localhost";
 	private static final String DB_NAME = "leaps"; // Data Base name
 	private static final String PORT = "3306";
 	

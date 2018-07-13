@@ -330,8 +330,10 @@ public class EventDao implements IEventDao {
 		
 		DBUserDao.getInstance().updateEvent(params, eventId);
 		
-		DBUserDao.getInstance().removeEventTagsFromDb(eventId);
-		DBUserDao.getInstance().addTagsToTheDB(tags, eventId);
+		if (tags != null && !tags.isEmpty()) {
+			DBUserDao.getInstance().removeEventTagsFromDb(eventId);
+			DBUserDao.getInstance().addTagsToTheDB(tags, eventId);
+		}
 		
 		if (requestData.get("time_from") != null || requestData.get("time_to") != null) {
 			Event event = DBUserDao.getInstance().getEventById(eventId);
@@ -444,7 +446,7 @@ public class EventDao implements IEventDao {
 		
 		if (obj.get("title") == null || obj.get("description") == null || obj.get("address") == null || obj.get("coord_lat") == null ||
 				obj.get("coord_lnt") == null || obj.get("price_from") == null || obj.get("free_slots") == null || obj.get("date") == null ||
-				obj.get("time_from") == null || obj.get("time_to") == null || obj.get("owner_id") == null || obj.get("firebase_topic") == null) {
+				obj.get("time_from") == null || obj.get("time_to") == null || obj.get("owner_id") == null) {
 			throw new InvalidCredentialsException(Configuration.ERROR_WHILE_CREATING_NEW_EVENT);
 		}
 		
@@ -468,7 +470,6 @@ public class EventDao implements IEventDao {
 		date = obj.get("date").getAsLong();
 		timeFrom = obj.get("time_from").getAsLong();
 		timeTo = obj.get("time_to").getAsLong();
-		eventFirebaseTopic = obj.get("firebase_topic").getAsString();
 		
 		if (obj.get("tags") != null) {
 			JsonElement jsonTags = obj.get("tags");

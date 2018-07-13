@@ -18,16 +18,13 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
-import javax.activation.DataHandler;
-import javax.activation.DataSource;
-import javax.activation.FileDataSource;
 import javax.mail.Message;
 import javax.mail.MessagingException;
+import javax.mail.PasswordAuthentication;
 import javax.mail.Session;
+import javax.mail.Transport;
 import javax.mail.internet.InternetAddress;
-import javax.mail.internet.MimeBodyPart;
 import javax.mail.internet.MimeMessage;
-import javax.mail.internet.MimeMultipart;
 import javax.servlet.http.HttpServletRequest;
 
 import org.quartz.CronScheduleBuilder;
@@ -495,156 +492,156 @@ public class LeapsUtils {
 	/** BELOW ARE DUMMY METHODS */
 	/****************************/
 	
-	public static void resetPassword(String email, String pass) throws MessagingException {
-		sendMail();
-//		final String username = "leaps.dev@gmail.com";
-//		final String password = "leaps.dev1";
-//
-//		Properties props = new Properties();
-//		props.put("mail.smtp.auth", "true");
-//		props.put("mail.smtp.ssl.enable", "true");
-//		props.put("mail.transport.protocol", "smtps");
-//		props.put("mail.smtp.host", "smtp.gmail.com");
-//		props.put("mail.smtp.port", "465");
-//
-//		Session session = Session.getInstance(props, new javax.mail.Authenticator() {
-//			protected PasswordAuthentication getPasswordAuthentication() {
-//				return new PasswordAuthentication(username, password);
-//			}
-//		  });
-//		
-//		System.out.println("Pass: " + pass);
-//		System.out.println("Email: " + email);
-//		
-//		try {
-//
-//			Message message = new MimeMessage(session);
-//			message.setFrom(new InternetAddress("from-email@gmail.com"));
-//			message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(email));
-//			message.setSubject("Reset Leaps password");
-//			message.setText("Testing,"
-//				+ "\n\n Your new pass is: " + pass);
-//
-//			Transport.send(message);
-//		} catch (MessagingException e) {
-//			throw new RuntimeException(e);
-//		}
+	// this method is not quite dummy ... :(
+	public static boolean sendMailToUser(String email, String pass) throws MessagingException {
+//		sendMail();
+		final String username = "leapsapp@gmail.com";
+		final String password = "b1ll4b0ng";
+
+		Properties props = new Properties();
+		props.put("mail.smtp.auth", "true");
+		props.put("mail.smtp.ssl.enable", "true");
+		props.put("mail.transport.protocol", "smtps");
+		props.put("mail.smtp.host", "smtp.gmail.com");
+		props.put("mail.smtp.port", "465");
+
+		Session session = Session.getInstance(props, new javax.mail.Authenticator() {
+			protected PasswordAuthentication getPasswordAuthentication() {
+				return new PasswordAuthentication(username, password);
+			}
+		  });
+		
+		try {
+
+			Message message = new MimeMessage(session);
+			message.setFrom(new InternetAddress("noreply@leaps.club"));
+			message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(email));
+			message.setSubject("Reset Leaps password");
+			message.setText("A request for a password change has been issued."
+				+ "\n\n Your new pass is: " + pass);
+
+			Transport.send(message);
+			return true;
+		} catch (MessagingException e) {
+			System.out.println(e.toString());
+			return false;
+		}
 	}
 	
 	
 	
 	public static void sendMail() throws MessagingException {
 	
-		// IMPORTANT: To successfully send an email, you must replace the values of the strings below with your own values.   
-		  String EMAIL_FROM = "leaps.dev@gmail.com";    // Replace with the sender's address. This address must be verified with Amazon SES.
-//		  String EMAIL_REPLY_TO  = "REPLY-TO@EXAMPLE.COM";  // Replace with the address replies should go to. This address must be verified with Amazon SES. 
-		  String EMAIL_RECIPIENT = "noexile@gmail.com"; // Replace with a recipient address. If your account is still in the sandbox,
-		                                                   // this address must be verified with Amazon SES.  
-		  String EMAIL_ATTACHMENTS = "ATTACHMENT-FILE-NAME-WITH-PATH"; // Replace with the path of an attachment. Must be a valid path or this project will not build.
-		                                                              // Remember to use two slashes in place of each slash.
-		  
-		  // IMPORTANT: Ensure that the region selected below is the one in which your identities are verified.  
-		  Regions AWS_REGION = Regions.EU_WEST_1;           // Choose the AWS region of the Amazon SES endpoint you want to connect to. Note that your sandbox 
-		                                                   // status, sending limits, and Amazon SES identity-related settings are specific to a given AWS 
-		                                                   // region, so be sure to select an AWS region in which you set up Amazon SES. Here, we are using 
-		                                                   // the US West (Oregon) region. Examples of other regions that Amazon SES supports are US_EAST_1 
-		                                                   // and EU_WEST_1. For a complete list, see http://docs.aws.amazon.com/ses/latest/DeveloperGuide/regions.html 
-		  
-		String EMAIL_SUBJECT   = "Amazon SES email test";
-		String EMAIL_BODY_TEXT = "This MIME email was sent through Amazon SES using SendRawEmail.";
-		  
-		Session session = Session.getDefaultInstance(new Properties());
-		MimeMessage message = new MimeMessage(session);
-		message.setSubject(EMAIL_SUBJECT, "UTF-8");
-		
-		message.setFrom(new InternetAddress(EMAIL_FROM));
-//		message.setReplyTo(new Address[]{new InternetAddress(EMAIL_REPLY_TO)});
-		message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(EMAIL_RECIPIENT));
-		
-		// Cover wrap
-		MimeBodyPart wrap = new MimeBodyPart();
-		
-		// Alternative TEXT/HTML content
-		MimeMultipart cover = new MimeMultipart("alternative");
-		MimeBodyPart html = new MimeBodyPart();
-		cover.addBodyPart(html);
-		
-		wrap.setContent(cover);
-		
-		MimeMultipart content = new MimeMultipart("related");
-		message.setContent(content);
-		content.addBodyPart(wrap);
-		
-		String[] attachmentsFiles = new String[]{
-		    EMAIL_ATTACHMENTS
-		};
-		
-		// This is just for testing HTML embedding of different type of attachments.
-		StringBuilder sb = new StringBuilder();
-		
-		for (String attachmentFileName : attachmentsFiles) {
-		    String id = UUID.randomUUID().toString();
-		    sb.append("<img src=\"cid:");
-		sb.append(id);
-		sb.append("\" alt=\"ATTACHMENT\"/>\n");
-		
-		MimeBodyPart attachment = new MimeBodyPart();
-		
-		DataSource fds = new FileDataSource(attachmentFileName);
-		attachment.setDataHandler(new DataHandler(fds));
-		attachment.setHeader("Content-ID", "<" + id + ">");
-		    attachment.setFileName(fds.getName());
-		
-		    content.addBodyPart(attachment);
-		}
-		
-		html.setContent("<html><body><h1>HTML</h1>\n" + EMAIL_BODY_TEXT + "</body></html>", "text/html");
-		
-		try {
-		    System.out.println("Attempting to send an email through Amazon SES by using the AWS SDK for Java...");
-		
-		/*
-		 * The ProfileCredentialsProvider will return your [default]
-		 * credential profile by reading from the credentials file located at
-		 * (~/.aws/credentials).
-		 *
-		 * TransferManager manages a pool of threads, so we create a
-		 * single instance and share it throughout our application.
-		 */
-		AWSCredentials credentials = null;
-		try {
-		    credentials = new ProfileCredentialsProvider().getCredentials();
-		} catch (Exception e) {
-		    throw new AmazonClientException(
-		            "Cannot load the credentials from the credential profiles file. " +
-		"Please make sure that your credentials file is at the correct " +
-		"location (~/.aws/credentials), and is in valid format.",
-		            e);
-		}
-		
-		// Instantiate an Amazon SES client, which will make the service call with the supplied AWS credentials.
-		AmazonSimpleEmailServiceClient client = new AmazonSimpleEmailServiceClient(credentials);
-		Region REGION = Region.getRegion(AWS_REGION);
-		client.setRegion(REGION);
-		
-		// Print the raw email content on the console
-		PrintStream out = System.out;
-		message.writeTo(out);
-		
-		// Send the email.
-		ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-		message.writeTo(outputStream);
-		RawMessage rawMessage = new RawMessage(ByteBuffer.wrap(outputStream.toByteArray()));
-		
-		SendRawEmailRequest rawEmailRequest = new SendRawEmailRequest(rawMessage);
-		client.sendRawEmail(rawEmailRequest);
-		System.out.println("Email sent!");
-		
-		} catch (Exception ex) {
-		  System.out.println("Email Failed");
-		System.err.println("Error message: " + ex.getMessage());
-		        ex.printStackTrace();
-		    }
+//		// IMPORTANT: To successfully send an email, you must replace the values of the strings below with your own values.   
+//		  String EMAIL_FROM = "leaps.dev@gmail.com";    // Replace with the sender's address. This address must be verified with Amazon SES.
+////		  String EMAIL_REPLY_TO  = "REPLY-TO@EXAMPLE.COM";  // Replace with the address replies should go to. This address must be verified with Amazon SES. 
+//		  String EMAIL_RECIPIENT = "noexile@gmail.com"; // Replace with a recipient address. If your account is still in the sandbox,
+//		                                                   // this address must be verified with Amazon SES.  
+//		  String EMAIL_ATTACHMENTS = "ATTACHMENT-FILE-NAME-WITH-PATH"; // Replace with the path of an attachment. Must be a valid path or this project will not build.
+//		                                                              // Remember to use two slashes in place of each slash.
+//		  
+//		  // IMPORTANT: Ensure that the region selected below is the one in which your identities are verified.  
+//		  Regions AWS_REGION = Regions.EU_WEST_1;           // Choose the AWS region of the Amazon SES endpoint you want to connect to. Note that your sandbox 
+//		                                                   // status, sending limits, and Amazon SES identity-related settings are specific to a given AWS 
+//		                                                   // region, so be sure to select an AWS region in which you set up Amazon SES. Here, we are using 
+//		                                                   // the US West (Oregon) region. Examples of other regions that Amazon SES supports are US_EAST_1 
+//		                                                   // and EU_WEST_1. For a complete list, see http://docs.aws.amazon.com/ses/latest/DeveloperGuide/regions.html 
+//		  
+//		String EMAIL_SUBJECT   = "Amazon SES email test";
+//		String EMAIL_BODY_TEXT = "This MIME email was sent through Amazon SES using SendRawEmail.";
+//		  
+//		Session session = Session.getDefaultInstance(new Properties());
+//		MimeMessage message = new MimeMessage(session);
+//		message.setSubject(EMAIL_SUBJECT, "UTF-8");
+//		
+//		message.setFrom(new InternetAddress(EMAIL_FROM));
+////		message.setReplyTo(new Address[]{new InternetAddress(EMAIL_REPLY_TO)});
+//		message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(EMAIL_RECIPIENT));
+//		
+//		// Cover wrap
+//		MimeBodyPart wrap = new MimeBodyPart();
+//		
+//		// Alternative TEXT/HTML content
+//		MimeMultipart cover = new MimeMultipart("alternative");
+//		MimeBodyPart html = new MimeBodyPart();
+//		cover.addBodyPart(html);
+//		
+//		wrap.setContent(cover);
+//		
+//		MimeMultipart content = new MimeMultipart("related");
+//		message.setContent(content);
+//		content.addBodyPart(wrap);
+//		
+//		String[] attachmentsFiles = new String[]{
+//		    EMAIL_ATTACHMENTS
+//		};
+//		
+//		// This is just for testing HTML embedding of different type of attachments.
+//		StringBuilder sb = new StringBuilder();
+//		
+//		for (String attachmentFileName : attachmentsFiles) {
+//		    String id = UUID.randomUUID().toString();
+//		    sb.append("<img src=\"cid:");
+//		sb.append(id);
+//		sb.append("\" alt=\"ATTACHMENT\"/>\n");
+//		
+//		MimeBodyPart attachment = new MimeBodyPart();
+//		
+//		DataSource fds = new FileDataSource(attachmentFileName);
+//		attachment.setDataHandler(new DataHandler(fds));
+//		attachment.setHeader("Content-ID", "<" + id + ">");
+//		    attachment.setFileName(fds.getName());
+//		
+//		    content.addBodyPart(attachment);
+//		}
+//		
+//		html.setContent("<html><body><h1>HTML</h1>\n" + EMAIL_BODY_TEXT + "</body></html>", "text/html");
+//		
+//		try {
+//		    System.out.println("Attempting to send an email through Amazon SES by using the AWS SDK for Java...");
+//		
+//		/*
+//		 * The ProfileCredentialsProvider will return your [default]
+//		 * credential profile by reading from the credentials file located at
+//		 * (~/.aws/credentials).
+//		 *
+//		 * TransferManager manages a pool of threads, so we create a
+//		 * single instance and share it throughout our application.
+//		 */
+//		AWSCredentials credentials = null;
+//		try {
+//		    credentials = new ProfileCredentialsProvider().getCredentials();
+//		} catch (Exception e) {
+//		    throw new AmazonClientException(
+//		            "Cannot load the credentials from the credential profiles file. " +
+//		"Please make sure that your credentials file is at the correct " +
+//		"location (~/.aws/credentials), and is in valid format.",
+//		            e);
+//		}
+//		
+//		// Instantiate an Amazon SES client, which will make the service call with the supplied AWS credentials.
+//		AmazonSimpleEmailServiceClient client = new AmazonSimpleEmailServiceClient(credentials);
+//		Region REGION = Region.getRegion(AWS_REGION);
+//		client.setRegion(REGION);
+//		
+//		// Print the raw email content on the console
+//		PrintStream out = System.out;
+//		message.writeTo(out);
+//		
+//		// Send the email.
+//		ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+//		message.writeTo(outputStream);
+//		RawMessage rawMessage = new RawMessage(ByteBuffer.wrap(outputStream.toByteArray()));
+//		
+//		SendRawEmailRequest rawEmailRequest = new SendRawEmailRequest(rawMessage);
+//		client.sendRawEmail(rawEmailRequest);
+//		System.out.println("Email sent!");
+//		
+//		} catch (Exception ex) {
+//		  System.out.println("Email Failed");
+//		System.err.println("Error message: " + ex.getMessage());
+//		        ex.printStackTrace();
+//		    }
 	}
 
 	public static void logRetrievedUserFromTheDB(User user) {

@@ -41,6 +41,7 @@ import com.leaps.model.user.User;
 import com.leaps.model.user.UserDao;
 import com.leaps.model.utils.Configuration;
 import com.leaps.model.utils.DebuggingManager;
+import com.leaps.model.utils.EmailSender;
 //import com.leaps.model.utils.EmailSender;
 import com.leaps.model.utils.LeapsUtils;
 
@@ -463,27 +464,23 @@ public class UserController {
 	public String resetPassword(HttpServletRequest req, HttpServletResponse resp) throws Exception {
 		String email;
 		try (Scanner sc = new Scanner(req.getInputStream())) {
-//			StringBuilder sb = new StringBuilder();
-//			while (sc.hasNext()) {
-//				sb.append(sc.nextLine());
-//			}
-//			
-//			String requestData = sb.toString();
-//			
-//			JsonParser parser = new JsonParser();
-//			JsonObject obj = parser.parse(requestData).getAsJsonObject();
-//
-//			if (obj.get("email_address") == null) {
-//				throw new InvalidInputParamsException(Configuration.INVALID_INPUT_PAREMETERS);
-//			}
-//			
-//			email = obj.get("email_address").getAsString();
-//			
-//			if(!UserDao.getInstance().resetPassword(email)) {
-//				// TODO: remove the unauthorized exception
-//				// in all cases it will return ok status at the moment
-////				throw new UserException(Configuration.INVALID_EMAIL);
-//			}
+			StringBuilder sb = new StringBuilder();
+			while (sc.hasNext()) {
+				sb.append(sc.nextLine());
+			}
+			
+			String requestData = sb.toString();
+			
+			JsonParser parser = new JsonParser();
+			JsonObject obj = parser.parse(requestData).getAsJsonObject();
+
+			if (obj.get("email_address") == null) {
+				throw new InvalidInputParamsException(Configuration.INVALID_INPUT_PAREMETERS);
+			}
+			
+			email = obj.get("email_address").getAsString();
+			
+			UserDao.getInstance().resetPassword(email);
 			
 //			EmailSender.sendEmail();
 			return HttpStatus.OK.toString();

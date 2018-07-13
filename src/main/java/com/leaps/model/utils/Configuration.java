@@ -83,7 +83,8 @@ public class Configuration {
 	public static final String SERVER_EVENTS_FILE_LOCATION = "/home/ec2-user/leaps/Images/Events/";
 	public static final String SERVER_USERS_FILE_LOCATION = "/home/ec2-user/leaps/Images/Users/";
 	
-	public static final String IMAGE_START_PATH = "/home/ec2-user/leaps/";
+//	public static final String IMAGE_START_PATH = "/home/ec2-user/leaps/";
+	public static final String IMAGE_START_PATH = "/root/leaps/";
 	public static final String USER_IMAGE_PATH = "Images/Users/";
 	public static final String EVENT_IMAGE_PATH = "Images/Events/";
 	public static final String RATE_IMAGE_PATH = "Images/Rate/";
