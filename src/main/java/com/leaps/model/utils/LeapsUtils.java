@@ -487,16 +487,14 @@ public class LeapsUtils {
 	    bd = bd.setScale(places, RoundingMode.HALF_UP);
 	    return bd.doubleValue();
 	}
-	
-	/****************************/
-	/** BELOW ARE DUMMY METHODS */
-	/****************************/
-	
-	// this method is not quite dummy ... :(
+
+	/**
+	 * Email sender
+	 */
 	public static boolean sendMailToUser(String email, String pass) throws MessagingException {
-//		sendMail();
-		final String username = "leapsapp@gmail.com";
+		final String username = "george@leaps.club";
 		final String password = "b1ll4b0ng";
+		final String sendFrom = "noreply@leaps.club";
 
 		Properties props = new Properties();
 		props.put("mail.smtp.auth", "true");
@@ -514,7 +512,7 @@ public class LeapsUtils {
 		try {
 
 			Message message = new MimeMessage(session);
-			message.setFrom(new InternetAddress("noreply@leaps.club"));
+			message.setFrom(new InternetAddress(username, sendFrom));
 			message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(email));
 			message.setSubject("Reset Leaps password");
 			message.setText("A request for a password change has been issued."
@@ -522,13 +520,17 @@ public class LeapsUtils {
 
 			Transport.send(message);
 			return true;
-		} catch (MessagingException e) {
+		} catch (MessagingException | UnsupportedEncodingException e) {
 			System.out.println(e.toString());
 			return false;
 		}
 	}
 	
 	
+	
+	/****************************/
+	/** BELOW ARE DUMMY METHODS */
+	/****************************/
 	
 	public static void sendMail() throws MessagingException {
 	

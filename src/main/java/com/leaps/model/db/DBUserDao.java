@@ -455,8 +455,6 @@ public class DBUserDao implements IDBUserDao {
 	            while (rs.next()) {
 	            	dbTags.add(EventDao.getInstance().createNewTag(rs.getInt(1), tags.get(index++)));
 	            }
-				
-				return true;
 			}
 
 			// add all tags in 'event_has_tags' schema
