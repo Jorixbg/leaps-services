@@ -41,7 +41,6 @@ import com.leaps.model.user.User;
 import com.leaps.model.user.UserDao;
 import com.leaps.model.utils.Configuration;
 import com.leaps.model.utils.DebuggingManager;
-import com.leaps.model.utils.EmailSender;
 //import com.leaps.model.utils.EmailSender;
 import com.leaps.model.utils.LeapsUtils;
 
