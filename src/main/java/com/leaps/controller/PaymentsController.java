@@ -46,7 +46,12 @@ public class PaymentsController {
 	    CloseableHttpClient client = HttpClients.createDefault();
 	    HttpPost httpPost = new HttpPost("https://checkout-test.adyen.com/v37/paymentSession"); // TODO hardocded, create properties
 	 
+	    httpPost.setHeader("X-API-Key", ""); // TODO
+	    
 	    StringEntity entity = new StringEntity(mapperObj.writeValueAsString(request));
+	    
+	    logger.info("Sending session request to Adyen");
+	    
 	    httpPost.setEntity(entity);
 	    httpPost.setHeader("Accept", "application/json");
 	    httpPost.setHeader("Content-type", "application/json");

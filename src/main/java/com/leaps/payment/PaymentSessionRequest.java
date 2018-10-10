@@ -20,8 +20,9 @@ public class PaymentSessionRequest {
 		this.token = obj.get("token").getAsString();
 		this.returnUrl = obj.get("returnUrl").getAsString();
 		Amount amount = new Amount();
-		amount.setCurrency(obj.get("currency").getAsString());
-		amount.setValue(obj.get("value").getAsString());
+		JsonObject amountObj = obj.getAsJsonObject("amount");
+		amount.setCurrency(amountObj.get("currency").getAsString());
+		amount.setValue(amountObj.get("value").getAsString());
 		this.amount = amount;
 	}
 
