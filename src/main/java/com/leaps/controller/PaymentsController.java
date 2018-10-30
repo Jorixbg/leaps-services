@@ -1,6 +1,7 @@
 package com.leaps.controller;
 
 import java.io.IOException;
+import java.util.List;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -8,6 +9,7 @@ import javax.servlet.http.HttpServletResponse;
 import org.apache.http.client.ClientProtocolException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -18,6 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.leaps.configs.Configuration;
+import com.leaps.configs.ConfigurationService;
 import com.leaps.model.exceptions.AuthorizationException;
 import com.leaps.model.utils.LeapsUtils;
 import com.leaps.payment.PaymentSessionRequest;
@@ -28,6 +32,9 @@ public class PaymentsController {
 	
 	@SuppressWarnings("unused")
 	private final Logger logger = LoggerFactory.getLogger(PaymentsController.class);
+	
+	@Autowired
+	ConfigurationService configurationService;
 	
 	private RestTemplate restTemplate;
 	
@@ -42,6 +49,8 @@ public class PaymentsController {
 		
 		restTemplate = new RestTemplate();
 //		LeapsUtils.checkToken(req.getHeader("Authorization"));
+		
+		List<Configuration> configs = configurationService.loadConfigs();
 		
 		ObjectMapper mapperObj = new ObjectMapper();
 		
