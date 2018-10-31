@@ -52,6 +52,11 @@ public class PaymentsController {
 		
 		List<Configuration> configs = configurationService.loadConfigs();
 		
+		String apiKey = configurationService.getByKey("a").getValue();
+		
+		// TODO
+		apiKey = "AQEqhmfuXNWTK0Qc+iScl2UotMWYS4RYA4cYDDfhOOiB09PxEfVmghV8BGCdEMFdWw2+5HzctViMSCJMYAc=-801n9bVAvOEh07mZH7rUK6vM3yIRBGGxELWcfNpN9Sg=-4exfen7P82cAhbxz";
+		
 		ObjectMapper mapperObj = new ObjectMapper();
 		
 		PaymentSessionRequest request = new PaymentSessionRequest(LeapsUtils.getRequestData(req));
@@ -59,7 +64,7 @@ public class PaymentsController {
 	    String url = "https://checkout-test.adyen.com/v37/paymentSession"; // TODO hardocded, create properties
 	 
 	    HttpHeaders headers = new HttpHeaders();
-	    headers.add("X-API-Key", "AQEqhmfuXNWTK0Qc+iScl2UotMWYS4RYA4cYDDfhOOiB09PxEfVmghV8BGCdEMFdWw2+5HzctViMSCJMYAc=-801n9bVAvOEh07mZH7rUK6vM3yIRBGGxELWcfNpN9Sg=-4exfen7P82cAhbxz"); // TODO
+	    headers.add("X-API-Key", apiKey); // TODO
 	    headers.setContentType(MediaType.APPLICATION_JSON);
 	    
 	    HttpEntity<String> entity = new HttpEntity<String>(mapperObj.writeValueAsString(request), headers);

@@ -17,4 +17,8 @@ public class ConfigurationService {
 		configurationRepository.findAll().forEach(configs::add);
 		return configs;
 	}
+	
+	public Configuration getByKey(String key) {
+		return configurationRepository.findByKey(key).get(0);
+	}
 }
