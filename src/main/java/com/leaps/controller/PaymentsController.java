@@ -1,77 +1,108 @@
 package com.leaps.controller;
 
-import java.io.IOException;
-import java.util.List;
+import java.math.BigDecimal;
+import java.util.Arrays;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import com.braintreegateway.BraintreeGateway;
+import com.braintreegateway.Result;
+import com.braintreegateway.Transaction;
+import com.braintreegateway.Transaction.Status;
+import com.braintreegateway.TransactionRequest;
+import com.braintreegateway.CreditCard;
+import com.braintreegateway.Customer;
+import com.braintreegateway.ValidationError;
 
-import org.apache.http.client.ClientProtocolException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.RestTemplate;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.leaps.configs.Configuration;
-import com.leaps.configs.ConfigurationService;
-import com.leaps.model.exceptions.AuthorizationException;
-import com.leaps.model.utils.LeapsUtils;
-import com.leaps.payment.PaymentSessionRequest;
+import com.leaps.LeapsApplication;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 @RestController
 @RequestMapping("/payments")
 public class PaymentsController {
-	
-	@SuppressWarnings("unused")
-	private final Logger logger = LoggerFactory.getLogger(PaymentsController.class);
-	
-	@Autowired
-	ConfigurationService configurationService;
-	
-	private RestTemplate restTemplate;
-	
-	/**
-	 * Create payment session
-	 * @throws AuthorizationException 
-	 * @throws IOException 
-	 * @throws ClientProtocolException 
-	 */
-	@RequestMapping(method = RequestMethod.POST, value = "/paymentSession")
-	public String createPaymentSession(PaymentSessionRequest paymentSessionRequest) throws AuthorizationException, ClientProtocolException, IOException {
-		
-		restTemplate = new RestTemplate();
-//		LeapsUtils.checkToken(req.getHeader("Authorization"));
-		
-		List<Configuration> configs = configurationService.loadConfigs();
-		
-		String apiKey = configurationService.getByKey("a").getValue();
-		
-		// TODO
-		apiKey = "AQEqhmfuXNWTK0Qc+iScl2UotMWYS4RYA4cYDDfhOOiB09PxEfVmghV8BGCdEMFdWw2+5HzctViMSCJMYAc=-801n9bVAvOEh07mZH7rUK6vM3yIRBGGxELWcfNpN9Sg=-4exfen7P82cAhbxz";
-		
-		ObjectMapper mapperObj = new ObjectMapper();
-		
-//		PaymentSessionRequest request = new PaymentSessionRequest(LeapsUtils.getRequestData(req));
-		
-	    String url = "https://checkout-test.adyen.com/v37/paymentSession"; // TODO hardocded, create properties
-	 
-	    HttpHeaders headers = new HttpHeaders();
-	    headers.add("X-API-Key", apiKey); // TODO
-	    headers.setContentType(MediaType.APPLICATION_JSON);
-	    
-	    HttpEntity<String> entity = new HttpEntity<String>(mapperObj.writeValueAsString(paymentSessionRequest), headers);
-	    
-	    ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
-	    
-	    return response.getBody();
+
+	private BraintreeGateway gateway = LeapsApplication.gateway;
+
+	private Status[] TRANSACTION_SUCCESS_STATUSES = new Status[] {
+			Transaction.Status.AUTHORIZED,
+			Transaction.Status.AUTHORIZING,
+			Transaction.Status.SETTLED,
+			Transaction.Status.SETTLEMENT_CONFIRMED,
+			Transaction.Status.SETTLEMENT_PENDING,
+			Transaction.Status.SETTLING,
+			Transaction.Status.SUBMITTED_FOR_SETTLEMENT
+	};
+
+	@RequestMapping(value = "/", method = RequestMethod.GET)
+	public String root(Model model) {
+		return "redirect:checkouts";
+	}
+
+	@RequestMapping(value = "/checkouts", method = RequestMethod.GET)
+	public String checkout(Model model) {
+		String clientToken = gateway.clientToken().generate();
+		model.addAttribute("clientToken", clientToken);
+
+		return "checkouts/new";
+	}
+
+	@RequestMapping(value = "/checkouts", method = RequestMethod.POST)
+	public String postForm(@RequestParam("amount") String amount, @RequestParam("payment_method_nonce") String nonce, Model model, final RedirectAttributes redirectAttributes) {
+		BigDecimal decimalAmount;
+		try {
+			decimalAmount = new BigDecimal(amount);
+		} catch (NumberFormatException e) {
+			redirectAttributes.addFlashAttribute("errorDetails", "Error: 81503: Amount is an invalid format.");
+			return "redirect:checkouts";
+		}
+
+		TransactionRequest request = new TransactionRequest()
+				.amount(decimalAmount)
+				.paymentMethodNonce(nonce)
+				.options()
+				.submitForSettlement(true)
+				.done();
+
+		Result<Transaction> result = gateway.transaction().sale(request);
+
+		if (result.isSuccess()) {
+			Transaction transaction = result.getTarget();
+			return "redirect:checkouts/" + transaction.getId();
+		} else if (result.getTransaction() != null) {
+			Transaction transaction = result.getTransaction();
+			return "redirect:checkouts/" + transaction.getId();
+		} else {
+			String errorString = "";
+			for (ValidationError error : result.getErrors().getAllDeepValidationErrors()) {
+				errorString += "Error: " + error.getCode() + ": " + error.getMessage() + "\n";
+			}
+			redirectAttributes.addFlashAttribute("errorDetails", errorString);
+			return "redirect:checkouts";
+		}
+	}
+
+	@RequestMapping(value = "/checkouts/{transactionId}")
+	public String getTransaction(@PathVariable String transactionId, Model model) {
+		Transaction transaction;
+		CreditCard creditCard;
+		Customer customer;
+
+		try {
+			transaction = gateway.transaction().find(transactionId);
+			creditCard = transaction.getCreditCard();
+			customer = transaction.getCustomer();
+		} catch (Exception e) {
+			System.out.println("Exception: " + e);
+			return "redirect:/checkouts";
+		}
+
+		model.addAttribute("isSuccess", Arrays.asList(TRANSACTION_SUCCESS_STATUSES).contains(transaction.getStatus()));
+		model.addAttribute("transaction", transaction);
+		model.addAttribute("creditCard", creditCard);
+		model.addAttribute("customer", customer);
+
+		return "checkouts/show";
 	}
 	
 }
