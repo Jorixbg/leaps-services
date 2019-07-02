@@ -6,7 +6,7 @@ public class Token {
 	private Long id;
 	private Long lastModified;
 	
-	Token(Long id) {
+	public Token(Long id) {
 		setId(id);
 		setLastModified(System.currentTimeMillis());
 	}

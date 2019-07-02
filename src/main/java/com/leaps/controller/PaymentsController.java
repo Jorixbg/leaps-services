@@ -45,7 +45,7 @@ public class PaymentsController {
 	 * @throws ClientProtocolException 
 	 */
 	@RequestMapping(method = RequestMethod.POST, value = "/paymentSession")
-	public String createPaymentSession(HttpServletRequest req, HttpServletResponse resp) throws AuthorizationException, ClientProtocolException, IOException {
+	public String createPaymentSession(PaymentSessionRequest paymentSessionRequest) throws AuthorizationException, ClientProtocolException, IOException {
 		
 		restTemplate = new RestTemplate();
 //		LeapsUtils.checkToken(req.getHeader("Authorization"));
@@ -59,7 +59,7 @@ public class PaymentsController {
 		
 		ObjectMapper mapperObj = new ObjectMapper();
 		
-		PaymentSessionRequest request = new PaymentSessionRequest(LeapsUtils.getRequestData(req));
+//		PaymentSessionRequest request = new PaymentSessionRequest(LeapsUtils.getRequestData(req));
 		
 	    String url = "https://checkout-test.adyen.com/v37/paymentSession"; // TODO hardocded, create properties
 	 
@@ -67,7 +67,7 @@ public class PaymentsController {
 	    headers.add("X-API-Key", apiKey); // TODO
 	    headers.setContentType(MediaType.APPLICATION_JSON);
 	    
-	    HttpEntity<String> entity = new HttpEntity<String>(mapperObj.writeValueAsString(request), headers);
+	    HttpEntity<String> entity = new HttpEntity<String>(mapperObj.writeValueAsString(paymentSessionRequest), headers);
 	    
 	    ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
 	    

@@ -228,6 +228,11 @@ public class UserDao implements IUserDao {
 	}
 
 	public Map<Token, User> getUserFromCache(long token) {
+		// Debug
+		long id = 131313;
+		User testUser = new User();
+		testUser.setUserId(131313l);
+		cachedUsers.put(new Token(id),testUser);
 		for (Map.Entry<Token, User> users : cachedUsers.entrySet()) {
 			if (!cachedUsers.isEmpty()) {
 				if (users.getKey() != null && users.getKey().getId() != null && users.getKey().getId().equals(token)) {

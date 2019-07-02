@@ -18,6 +18,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
+import com.leaps.entities.EventRequest;
 import com.leaps.interfaces.IEventDao;
 import com.leaps.model.bean.RepeatingEvent;
 import com.leaps.model.bean.RepeatingEventTime;
@@ -418,68 +419,33 @@ public class EventDao implements IEventDao {
 		return LeapsUtils.generateJsonComment(commentId);
 	}
 
-	public JsonObject createEvent(long token, JsonObject obj) throws AuthorizationException, EventException {
-		String title;
-		String description;
-		String address;
-		double latitude;
-		double longitute;
-		int priceFrom;
-		int freeSlots;
-		long date;
-		long timeFrom;
-		long timeTo;
-		String eventFirebaseTopic = null;
-		List<String> tags = new ArrayList<String>();
-		
+	public JsonObject createEvent(long token, EventRequest eventRequest) throws AuthorizationException, EventException {
 		long ownerId = -1;
-					
+
 		if (UserDao.getInstance().getUserFromCache(token) == null) {
 			throw new AuthorizationException(Configuration.INVALID_OR_EXPIRED_TOKEN);
 		}
-		
+
 		Map<Token, User> cachedUser = UserDao.getInstance().getUserFromCache(token);
 
 		if (cachedUser == null || cachedUser.isEmpty()) {
 			throw new AuthorizationException(Configuration.INVALID_OR_EXPIRED_TOKEN);
 		}
-		
-		if (obj.get("title") == null || obj.get("description") == null || obj.get("address") == null || obj.get("coord_lat") == null ||
-				obj.get("coord_lnt") == null || obj.get("price_from") == null || obj.get("free_slots") == null || obj.get("date") == null ||
-				obj.get("time_from") == null || obj.get("time_to") == null || obj.get("owner_id") == null) {
-			throw new InvalidCredentialsException(Configuration.ERROR_WHILE_CREATING_NEW_EVENT);
-		}
-		
+
 		Iterator<Map.Entry<Token, User>> it = cachedUser.entrySet().iterator();
 		while (it.hasNext()) {
 		    Map.Entry<Token, User> pair = it.next();
 		    ownerId = pair.getValue().getUserId();
 		}
-		
-		if (ownerId != obj.get("owner_id").getAsLong()) {
+
+		if (ownerId != eventRequest.getOwnerId()) {
 			throw new InvalidCredentialsException("The owner's id does not match with the one on the server!");
 		}
-		
-		title = obj.get("title").getAsString();
-		description = obj.get("description").getAsString();
-		address = obj.get("address").getAsString();
-		latitude = obj.get("coord_lat").getAsDouble();
-		longitute = obj.get("coord_lnt").getAsDouble();
-		priceFrom = obj.get("price_from").getAsInt();
-		freeSlots = obj.get("free_slots").getAsInt();
-		date = obj.get("date").getAsLong();
-		timeFrom = obj.get("time_from").getAsLong();
-		timeTo = obj.get("time_to").getAsLong();
-		
-		if (obj.get("tags") != null) {
-			JsonElement jsonTags = obj.get("tags");
-			Type listType = new TypeToken<List<String>>() {}.getType();
 
-			tags = new Gson().fromJson(jsonTags, listType);
-		}
-		
-		Event event = EventDao.getInstance().createNewEvent(title, description, address, latitude, longitute, priceFrom, freeSlots, date, 
-															timeFrom, timeTo, tags, ownerId, eventFirebaseTopic);
+		Event event = EventDao.getInstance().createNewEvent(eventRequest.getTitle(), eventRequest.getDescription(),
+				eventRequest.getAddress(), eventRequest.getLatitude(), eventRequest.getLongitute(), eventRequest.getPriceFrom(),
+				eventRequest.getFreeSlots(), eventRequest.getDate(), eventRequest.getTimeFrom(), eventRequest.getTimeTo(),
+				eventRequest.getTags(), eventRequest.getOwnerId(), eventRequest.getEventFirebaseTopic());
 		
 		if (event == null) {
 			throw new EventException(Configuration.CANNOT_CREATE_NEW_EVENT);
@@ -489,6 +455,36 @@ public class EventDao implements IEventDao {
 		response.addProperty("event_id", event.getEventId());
 		
 		return response;
+	}
+
+	public Event createNewEvent(EventRequest eventRequest) throws EventException {
+		Event event = null;
+
+		Long dateCreated = System.currentTimeMillis();
+
+		// add the event to the DB and return its id
+		long eventId = DBUserDao.getInstance().createNewEvent(eventRequest.getTitle(), eventRequest.getDescription(), eventRequest.getDate(),
+				eventRequest.getTimeFrom(), eventRequest.getTimeTo(), eventRequest.getOwnerId(), eventRequest.getLatitude(),
+				eventRequest.getLongitute(), eventRequest.getPriceFrom(), eventRequest.getAddress(), eventRequest.getFreeSlots(),
+				dateCreated, eventRequest.getEventFirebaseTopic());
+
+		if (eventId >= 0) {
+			boolean tagsInsert = true;
+
+			if (eventRequest.getTags() != null && !eventRequest.getTags().isEmpty()) {
+				tagsInsert = DBUserDao.getInstance().addTagsToTheDB(eventRequest.getTags(), eventId);
+			}
+
+			if (tagsInsert) {
+				event = new Event(eventId, eventRequest.getTitle(), eventRequest.getDescription(), eventRequest.getDate(),
+						eventRequest.getTimeFrom(), eventRequest.getTimeTo(), eventRequest.getOwnerId(),
+						null, eventRequest.getLatitude(), eventRequest.getLongitute(),
+						eventRequest.getPriceFrom(), eventRequest.getAddress(), eventRequest.getFreeSlots(),
+						dateCreated, eventRequest.getEventFirebaseTopic());
+			}
+		}
+
+		return event;
 	}
 
 	public JsonObject getFeedEvents(String latFirstParam, String latSecondParam, String lngFirstParam, String lngSecondParam, long token) throws UserException, EventException, InvalidParametersException, ImageException, TagException {

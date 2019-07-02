@@ -11,14 +11,13 @@ import javax.servlet.annotation.MultipartConfig;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import com.leaps.entities.EventRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 import com.amazonaws.services.cognitoidp.model.UserNotFoundException;
 import com.google.gson.Gson;
@@ -55,30 +54,14 @@ public class EventController {
 	 * Create event
 	 */
 	@RequestMapping(method = RequestMethod.PUT, value = "/create")
-	public String createEvent(HttpServletRequest req, HttpServletResponse resp) {
+	public ResponseEntity<String> createEvent(@RequestHeader(value="Authorization") String authorizationHeader,
+											 EventRequest eventRequest) {
 		try {
-			return EventDao.getInstance().createEvent(LeapsUtils.checkToken(req.getHeader("Authorization")), LeapsUtils.getRequestData(req)).toString();
+			return ResponseEntity.ok(EventDao.getInstance().createEvent(LeapsUtils.checkToken(authorizationHeader), eventRequest).toString());
 		} catch (AuthorizationException ae) {
-			try {
-				resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, ae.getMessage());
-				return null;
-			} catch (IOException ioe) {
-				return null;
-			}
+			return ResponseEntity.status(HttpServletResponse.SC_UNAUTHORIZED).body(ae.getMessage());
 		} catch (EventException ex) {
-			try {
-				resp.sendError(HttpServletResponse.SC_CONFLICT, ex.getMessage());
-				return null;
-			} catch (IOException ioe) {
-				return null;
-			}
-		} catch (IOException e) {
-			try {
-				resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
-				return null;
-			} catch (IOException ioe2) {
-				return null;
-			}
+			return ResponseEntity.status(HttpServletResponse.SC_CONFLICT).body(ex.getMessage());
 		}
 	}
 

@@ -1,6 +1,5 @@
 package com.leaps.payment;
 
-import com.google.gson.JsonObject;
 public class PaymentSessionRequest {
 
 	private String merchantAccount;
@@ -11,20 +10,6 @@ public class PaymentSessionRequest {
 	private String shopperLocale;
 	private String token;
 	private String returnUrl;
-
-	public PaymentSessionRequest(JsonObject obj) {
-		this.channel = obj.get("channel").getAsString();
-		this.reference = obj.get("reference").getAsString();
-		this.countryCode = obj.get("countryCode").getAsString();
-		this.shopperLocale = obj.get("shopperLocale").getAsString();
-		this.token = obj.get("token").getAsString();
-		this.returnUrl = obj.get("returnUrl").getAsString();
-		Amount amount = new Amount();
-		JsonObject amountObj = obj.getAsJsonObject("amount");
-		amount.setCurrency(amountObj.get("currency").getAsString());
-		amount.setValue(amountObj.get("value").getAsString());
-		this.amount = amount;
-	}
 
 	public String getMerchantAccount() {
 		return merchantAccount;

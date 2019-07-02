@@ -27,7 +27,10 @@ public class User {
 	private String longDescription;
 	private String firebaseToken;
 	private List<Image> userImages;
-	
+
+	public User () {
+		super();
+	}
 	
 	User (Long userId, String username, String email, String pass, String firstName, String lastName, int age, String gender, String location,
 			int maxDistanceSetting, Long birthday, String description, String profileImageUrl, boolean isTrainer) {
