@@ -36,7 +36,7 @@ public class PaymentsController {
 
 	@RequestMapping(value = "/", method = RequestMethod.GET)
 	public String root(Model model) {
-		return "redirect:checkouts";
+	    return "redirect:checkouts";
 	}
 
 	@RequestMapping(value = "/checkouts", method = RequestMethod.GET)

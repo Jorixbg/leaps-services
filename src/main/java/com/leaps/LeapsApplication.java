@@ -18,7 +18,7 @@ public class LeapsApplication {
 	public static void main(String[] args) {
 		File configFile = new File(DEFAULT_CONFIG_FILENAME);
 		try {
-			if(configFile.exists() && !configFile.isDirectory()) {
+			if(null != configFile && configFile.exists() && !configFile.isDirectory()) {
 				gateway = BraintreeGatewayFactory.fromConfigFile(configFile);
 			} else {
 				gateway = BraintreeGatewayFactory.fromConfigMapping(System.getenv());

@@ -91,10 +91,10 @@ public class PaymentControllerTest {
     }
 
     @Test
-    @Ignore
     public void redirectsOnTransactionNotFound() throws Exception {
         mockMvc.perform(post("/payments/checkouts/invalid-transaction"))
-                .andExpect(status().isFound());
+                .andExpect(status().isOk())
+                .andExpect(content().string("redirect:/checkouts"));
     }
 
     @Test

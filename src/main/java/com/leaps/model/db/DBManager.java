@@ -8,8 +8,8 @@ public class DBManager {
 	
 	public enum ColumnNames{ users }
 	private final String JDBC_DRIVER = "com.mysql.jdbc.Driver";
-	
-	private final String USER = "root";
+
+	private final String USER = "admin";
 	private final String PASS = "Leaps1337.";
 	private final String HOSTNAME = "localhost";
 	private static final String DB_NAME = "leaps"; // Data Base name
@@ -17,7 +17,7 @@ public class DBManager {
 	
 	private final String DB_URL = "jdbc:mysql://localhost:8806/" + DB_NAME + "?autoReconnect=true&useSSL=false&useUnicode=true&characterEncoding=utf-8";
 
-	
+
 	// LOCAL DATABASE CONFIGURATION
 	boolean useLocal = false;
 	
