@@ -14,6 +14,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
@@ -45,7 +46,7 @@ public class PaymentsController {
 	 * @throws ClientProtocolException 
 	 */
 	@RequestMapping(method = RequestMethod.POST, value = "/paymentSession")
-	public String createPaymentSession(HttpServletRequest req, HttpServletResponse resp) throws AuthorizationException, ClientProtocolException, IOException {
+	public String createPaymentSession(@RequestBody PaymentSessionRequest request) throws AuthorizationException, ClientProtocolException, IOException {
 		
 		restTemplate = new RestTemplate();
 //		LeapsUtils.checkToken(req.getHeader("Authorization"));
@@ -58,8 +59,6 @@ public class PaymentsController {
 		apiKey = "AQEqhmfuXNWTK0Qc+iScl2UotMWYS4RYA4cYDDfhOOiB09PxEfVmghV8BGCdEMFdWw2+5HzctViMSCJMYAc=-801n9bVAvOEh07mZH7rUK6vM3yIRBGGxELWcfNpN9Sg=-4exfen7P82cAhbxz";
 		
 		ObjectMapper mapperObj = new ObjectMapper();
-		
-		PaymentSessionRequest request = new PaymentSessionRequest(LeapsUtils.getRequestData(req));
 		
 	    String url = "https://checkout-test.adyen.com/v37/paymentSession"; // TODO hardocded, create properties
 	 

@@ -9,7 +9,7 @@ public class DBManager {
 	public enum ColumnNames{ users }
 	private final String JDBC_DRIVER = "com.mysql.jdbc.Driver";
 	
-	private final String USER = "root";
+	private final String USER = "admin";
 	private final String PASS = "Leaps1337.";
 	private final String HOSTNAME = "localhost";
 	private static final String DB_NAME = "leaps"; // Data Base name

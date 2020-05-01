@@ -11,14 +11,16 @@ import javax.servlet.annotation.MultipartConfig;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import com.leaps.events.EventsService;
+import com.leaps.web.entities.EventsRequest;
+import com.leaps.web.entities.EventsResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 import com.amazonaws.services.cognitoidp.model.UserNotFoundException;
 import com.google.gson.Gson;
@@ -50,6 +52,9 @@ import com.leaps.model.utils.LeapsUtils;
 public class EventController {
 	
 	private final Logger logger = LoggerFactory.getLogger(EventController.class);
+
+	@Autowired
+	EventsService eventsService;
 	
 	/**
 	 * Create event
@@ -185,6 +190,15 @@ public class EventController {
 				return null;
 			}
 		}
+	}
+
+	/**
+	 * Get event by owner
+	 */
+	@RequestMapping(method = RequestMethod.GET, value = "/owner/{ownerId}")
+	@ResponseBody
+	public ResponseEntity<EventsResponse> getOwnerEvents(@PathVariable("ownerId") long ownerId) {
+		return ResponseEntity.ok(eventsService.getOwnerEvents(ownerId));
 	}
 	
 	/**
