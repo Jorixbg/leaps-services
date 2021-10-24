@@ -2,6 +2,7 @@ package com.leaps.controller;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
+import java.security.Principal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -49,6 +50,11 @@ import com.leaps.model.utils.LeapsUtils;
 public class UserController {
 	
 	private static final Logger logger = LoggerFactory.getLogger(UserController.class);
+
+	@RequestMapping("/")
+	public Principal user(Principal user) {
+		return user;
+	}
 	
 	@RequestMapping(method = RequestMethod.POST, value = "/update/firebase_token")
 	public String updateFirebaseToken(HttpServletRequest req, HttpServletResponse resp) {
